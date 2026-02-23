@@ -1,0 +1,1007 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<robot name="tesollo_right">
+  <joint name="rj_dg_1_1" type="revolute">
+    <origin xyz="-0.0162 0.019 0.0866" rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_mount" />
+    <child link="tesollo_right_rl_dg_1_1" />
+    <axis xyz="1. 0. 0." />
+    <limit lower="-0.3839724" upper="0.8901179" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_1_2" type="revolute">
+    <origin xyz="0.04195 0. 0. " rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_1_1" />
+    <child link="tesollo_right_rl_dg_1_2" />
+    <axis xyz="0. 0. 1." />
+    <limit lower="-3.1415927" upper="0." effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_1_3" type="revolute">
+    <origin xyz="0. 0.031 0. " rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_1_2" />
+    <child link="tesollo_right_rl_dg_1_3" />
+    <axis xyz="1. 0. 0." />
+    <limit lower="-1.5707963" upper="1.5707963" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_1_4" type="revolute">
+    <origin xyz="0. 0.0388 0. " rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_1_3" />
+    <child link="tesollo_right_rl_dg_1_4" />
+    <axis xyz="1. 0. 0." />
+    <limit lower="-1.5707963" upper="1.5707963" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_2_1" type="revolute">
+    <origin xyz="-0.0071 0.027 0.1399" rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_mount" />
+    <child link="tesollo_right_rl_dg_2_1" />
+    <axis xyz="1. 0. 0." />
+    <limit lower="-0.418879" upper="0.6108652" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_2_2" type="revolute">
+    <origin xyz="0.01765 0. 0.0265 " rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_2_1" />
+    <child link="tesollo_right_rl_dg_2_2" />
+    <axis xyz="0. 1. 0." />
+    <limit lower="0." upper="2.0071286" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_2_3" type="revolute">
+    <origin xyz="0. 0. 0.0388" rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_2_2" />
+    <child link="tesollo_right_rl_dg_2_3" />
+    <axis xyz="0. 1. 0." />
+    <limit lower="-1.5707963" upper="1.5707963" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_2_4" type="revolute">
+    <origin xyz="0. 0. 0.0388" rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_2_3" />
+    <child link="tesollo_right_rl_dg_2_4" />
+    <axis xyz="0. 1. 0." />
+    <limit lower="-1.5707963" upper="1.5707963" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_3_1" type="revolute">
+    <origin xyz="-0.0071 0.0025 0.1439" rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_mount" />
+    <child link="tesollo_right_rl_dg_3_1" />
+    <axis xyz="1. 0. 0." />
+    <limit lower="-0.6108652" upper="0.6108652" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_3_2" type="revolute">
+    <origin xyz="0.01765 0. 0.0265 " rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_3_1" />
+    <child link="tesollo_right_rl_dg_3_2" />
+    <axis xyz="0. 1. 0." />
+    <limit lower="0." upper="1.9547686" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_3_3" type="revolute">
+    <origin xyz="0. 0. 0.0388" rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_3_2" />
+    <child link="tesollo_right_rl_dg_3_3" />
+    <axis xyz="0. 1. 0." />
+    <limit lower="-1.5707963" upper="1.5707963" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_3_4" type="revolute">
+    <origin xyz="0. 0. 0.0388" rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_3_3" />
+    <child link="tesollo_right_rl_dg_3_4" />
+    <axis xyz="0. 1. 0." />
+    <limit lower="-1.5707963" upper="1.5707963" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_4_1" type="revolute">
+    <origin xyz="-0.0071 -0.022 0.1359" rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_mount" />
+    <child link="tesollo_right_rl_dg_4_1" />
+    <axis xyz="1. 0. 0." />
+    <limit lower="-0.6108652" upper="0.418879" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_4_2" type="revolute">
+    <origin xyz="0.01765 0. 0.0265 " rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_4_1" />
+    <child link="tesollo_right_rl_dg_4_2" />
+    <axis xyz="0. 1. 0." />
+    <limit lower="0." upper="1.9024088" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_4_3" type="revolute">
+    <origin xyz="0. 0. 0.0388" rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_4_2" />
+    <child link="tesollo_right_rl_dg_4_3" />
+    <axis xyz="0. 1. 0." />
+    <limit lower="-1.5707963" upper="1.5707963" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_4_4" type="revolute">
+    <origin xyz="0. 0. 0.0388" rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_4_3" />
+    <child link="tesollo_right_rl_dg_4_4" />
+    <axis xyz="0. 1. 0." />
+    <limit lower="-1.5707963" upper="1.5707963" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_5_1" type="revolute">
+    <origin xyz="0.0103 -0.0195 0.092 " rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_mount" />
+    <child link="tesollo_right_rl_dg_5_1" />
+    <axis xyz="0. 0. 1." />
+    <limit lower="-0.0174533" upper="1.0471976" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_5_2" type="revolute">
+    <origin xyz="0. -0.028 0.0381" rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_5_1" />
+    <child link="tesollo_right_rl_dg_5_2" />
+    <axis xyz="1. 0. 0." />
+    <limit lower="-0.418879" upper="0.6108652" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_5_3" type="revolute">
+    <origin xyz="0. 0. 0.031" rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_5_2" />
+    <child link="tesollo_right_rl_dg_5_3" />
+    <axis xyz="0. 1. 0." />
+    <limit lower="-1.5707963" upper="1.5707963" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rj_dg_5_4" type="revolute">
+    <origin xyz="0. 0. 0.0388" rpy="0. 0. 0." />
+    <parent link="tesollo_right_rl_dg_5_3" />
+    <child link="tesollo_right_rl_dg_5_4" />
+    <axis xyz="0. 1. 0." />
+    <limit lower="-1.5707963" upper="1.5707963" effort="7.5" velocity="3.1415927" />
+  </joint>
+  <joint name="rl_dg_ee_joint" type="fixed">
+    <origin xyz="0.023 0. 0.13" rpy="1.5707963 3.1415927 1.5707963" />
+    <parent link="tesollo_right_rl_dg_mount" />
+    <child link="rl_dg_ee" />
+  </joint>
+  <link name="rl_dg_ee">
+    <inertial>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0." />
+      <mass value="0.001" />
+      <inertia ixx="1e-6" ixy="0." ixz="0." iyy="1e-6" iyz="0." izz="1e-6" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0." />
+      <geometry>
+        <sphere radius="0.0001" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0." />
+      <geometry>
+        <sphere radius="0.0001" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_1_1">
+    <inertial>
+      <origin xyz="0.021473 0.0000031 0.0028146" rpy="0. 0. 0." />
+      <mass value="0.045" />
+      <inertia ixx="0.0000043" ixy="0." ixz="0.0000029" iyy="0.0000137" iyz="-0." izz="0.0000122" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_1_1_visuals_rl_dg_1_1_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_1_1_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_1_2">
+    <inertial>
+      <origin xyz="0.0005563 0.0155 0.0005563" rpy="0. 0. 0." />
+      <mass value="0.025" />
+      <inertia ixx="0.000002" ixy="-0.0000002" ixz="0." iyy="0.0000015" iyz="0.0000002" izz="0.000002" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_1_2_visuals_rl_dg_1_2_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_1_2_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_1_3">
+    <inertial>
+      <origin xyz="0.000023 0.014842 0.0000047" rpy="0. 0. 0." />
+      <mass value="0.045" />
+      <inertia ixx="0.000006" ixy="-0.0000004" ixz="-0." iyy="0.0000025" iyz="-0." izz="0.0000064" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_1_3_visuals_rl_dg_1_3_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_1_3_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_1_4">
+    <inertial>
+      <origin xyz="-0.0001843 0.0212612 0.0000518" rpy="0. 0. 0." />
+      <mass value="0.05" />
+      <inertia ixx="0.0000125" ixy="-0.0000002" ixz="-0." iyy="0.0000033" iyz="-0.0000001" izz="0.0000129" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_1_4_visuals_rl_dg_1_4_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <visual>
+      <origin xyz="0. 0.0363 0. " rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_1_4_visuals_rl_dg_1_tip_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_1_4_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0. 0.0363 0. " rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_1_tip_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_2_1">
+    <inertial>
+      <origin xyz="0.001061 0.0002442 0.023499 " rpy="0. 0. 0." />
+      <mass value="0.045" />
+      <inertia ixx="0.0000066" ixy="0." ixz="-0.0000012" iyy="0.0000095" iyz="0.0000001" izz="0.0000071" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_2_1_visuals_rl_dg_2_1_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_2_1_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_2_2">
+    <inertial>
+      <origin xyz="-0.0000047 0.000023 0.023958 " rpy="0. 0. 0." />
+      <mass value="0.045" />
+      <inertia ixx="0.0000064" ixy="0." ixz="-0." iyy="0.000006" iyz="0.0000004" izz="0.0000025" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_2_2_visuals_rl_dg_2_2_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_2_2_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_2_3">
+    <inertial>
+      <origin xyz="-0.0000047 0.000023 0.023958 " rpy="0. 0. 0." />
+      <mass value="0.045" />
+      <inertia ixx="0.0000064" ixy="0." ixz="-0." iyy="0.000006" iyz="0.0000004" izz="0.0000025" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_2_3_visuals_rl_dg_2_3_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_2_3_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_2_4">
+    <inertial>
+      <origin xyz="0.0000442 0.0003587 0.0203112" rpy="0. 0. 0." />
+      <mass value="0.03" />
+      <inertia ixx="0.0000041" ixy="0." ixz="-0.0000001" iyy="0.0000036" iyz="0.0000002" izz="0.000002" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_2_4_visuals_rl_dg_2_4_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <visual>
+      <origin xyz="0. 0. 0.0255" rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_2_4_visuals_rl_dg_2_tip_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_2_4_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0. 0. 0.0255" rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_2_tip_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_3_1">
+    <inertial>
+      <origin xyz="0.0012558 -0.000177 0.023374 " rpy="0. 0. 0." />
+      <mass value="0.045" />
+      <inertia ixx="0.0000062" ixy="0.0000001" ixz="-0.0000012" iyy="0.0000093" iyz="0." izz="0.0000068" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_3_1_visuals_rl_dg_3_1_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_3_1_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_3_2">
+    <inertial>
+      <origin xyz="-0.0000047 0.000023 0.023958 " rpy="0. 0. 0." />
+      <mass value="0.045" />
+      <inertia ixx="0.0000064" ixy="0." ixz="-0." iyy="0.000006" iyz="0.0000004" izz="0.0000025" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_3_2_visuals_rl_dg_3_2_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_3_2_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_3_3">
+    <inertial>
+      <origin xyz="-0.0000047 0.000023 0.023958 " rpy="0. 0. 0." />
+      <mass value="0.045" />
+      <inertia ixx="0.0000064" ixy="0." ixz="-0." iyy="0.000006" iyz="0.0000004" izz="0.0000025" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_3_3_visuals_rl_dg_3_3_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_3_3_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_3_4">
+    <inertial>
+      <origin xyz="0.0000442 0.0003587 0.0203112" rpy="0. 0. 0." />
+      <mass value="0.03" />
+      <inertia ixx="0.0000041" ixy="0." ixz="-0.0000001" iyy="0.0000036" iyz="0.0000002" izz="0.000002" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_3_4_visuals_rl_dg_3_4_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <visual>
+      <origin xyz="0. 0. 0.0255" rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_3_4_visuals_rl_dg_3_tip_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_3_4_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0. 0. 0.0255" rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_3_tip_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_4_1">
+    <inertial>
+      <origin xyz="0.0000606 -0.0005857 0.023499 " rpy="0. 0. 0." />
+      <mass value="0.045" />
+      <inertia ixx="0.0000066" ixy="0.0000002" ixz="-0.0000012" iyy="0.0000095" iyz="-0." izz="0.0000071" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_4_1_visuals_rl_dg_4_1_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_4_1_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_4_2">
+    <inertial>
+      <origin xyz="-0.0000047 0.000023 0.023958 " rpy="0. 0. 0." />
+      <mass value="0.045" />
+      <inertia ixx="0.0000064" ixy="0." ixz="-0." iyy="0.000006" iyz="0.0000004" izz="0.0000025" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_4_2_visuals_rl_dg_4_2_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_4_2_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_4_3">
+    <inertial>
+      <origin xyz="-0.0000047 0.000023 0.023958 " rpy="0. 0. 0." />
+      <mass value="0.045" />
+      <inertia ixx="0.0000064" ixy="0." ixz="-0." iyy="0.000006" iyz="0.0000004" izz="0.0000025" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_4_3_visuals_rl_dg_4_3_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_4_3_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_4_4">
+    <inertial>
+      <origin xyz="0.0000442 0.0003587 0.0203112" rpy="0. 0. 0." />
+      <mass value="0.03" />
+      <inertia ixx="0.0000041" ixy="0." ixz="-0.0000001" iyy="0.0000036" iyz="0.0000002" izz="0.000002" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_4_4_visuals_rl_dg_4_4_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <visual>
+      <origin xyz="0. 0. 0.0255" rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_4_4_visuals_rl_dg_4_tip_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_4_4_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0. 0. 0.0255" rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_4_tip_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_5_1">
+    <inertial>
+      <origin xyz="-0.0043301 -0.0250157 0.0140244" rpy="0. 0. 0." />
+      <mass value="0.055" />
+      <inertia ixx="0.0000236" ixy="0.0000003" ixz="0.0000023" iyy="0.0000237" iyz="0.0000045" izz="0.0000113" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_5_1_visuals_rl_dg_5_1_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_5_1_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_5_2">
+    <inertial>
+      <origin xyz="-0.0005376 0.0005376 0.0155001" rpy="0. 0. 0." />
+      <mass value="0.025" />
+      <inertia ixx="0.000002" ixy="-0." ixz="-0.0000002" iyy="0.000002" iyz="-0.0000002" izz="0.0000015" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_5_2_visuals_rl_dg_5_2_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_5_2_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_5_3">
+    <inertial>
+      <origin xyz="0.0000047 0.000023 0.0148419" rpy="0. 0. 0." />
+      <mass value="0.045" />
+      <inertia ixx="0.0000064" ixy="-0." ixz="-0." iyy="0.000006" iyz="-0.0000004" izz="0.0000025" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_5_3_visuals_rl_dg_5_3_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_5_3_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_5_4">
+    <inertial>
+      <origin xyz="0.0000518 -0.0001843 0.0212609" rpy="0. 0. 0." />
+      <mass value="0.05" />
+      <inertia ixx="0.0000129" ixy="-0." ixz="-0.0000001" iyy="0.0000125" iyz="-0.0000002" izz="0.0000033" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_5_4_visuals_rl_dg_5_4_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <visual>
+      <origin xyz="0. 0. 0.0363" rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_5_4_visuals_rl_dg_5_tip_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_5_4_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0. 0. 0.0363" rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_5_tip_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tesollo_right_rl_dg_mount">
+    <inertial>
+      <origin xyz="-0.0040007 0.0006643 0.0695966" rpy="0. 0. 0." />
+      <mass value="0.85" />
+      <inertia ixx="0.0023165" ixy="0.0000138" ixz="0.0001302" iyy="0.0022259" iyz="-0.0000629" izz="0.0009268" />
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_mount_visuals_rl_dg_mount_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <visual>
+      <origin xyz="0. 0. 0.004" rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_mount_visuals_rl_dg_base_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <visual>
+      <origin xyz="0. 0. 0.0738" rpy="1.5707872 0. 0. " />
+      <geometry>
+        <mesh filename="meshes/tesollo_right_rl_dg_mount_visuals_rl_dg_palm_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_mount_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0. 0. 0.004" rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_base_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0. 0. 0.0738" rpy="1.5707872 0. 0." />
+      <geometry>
+        <mesh filename="meshes/rl_dg_palm_c_mesh.obj" scale="1. 1. 1." />
+      </geometry>
+    </collision>
+  </link>
+  <!-- Palm Sensor Links -->
+  <joint name="tesollo_right_palm_sensor_joint1" type="fixed">
+    <origin xyz="0.02 -0.02 0.14" rpy="0 1.5708 0" />
+    <parent link="tesollo_right_rl_dg_mount" />
+    <child link="tesollo_right_palm_sensor_link1" />
+  </joint>
+  <link name="tesollo_right_palm_sensor_link1">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="tesollo_right_palm_sensor_joint2" type="fixed">
+    <origin xyz="0.02 0 0.14" rpy="0 1.5708 0" />
+    <parent link="tesollo_right_rl_dg_mount" />
+    <child link="tesollo_right_palm_sensor_link2" />
+  </joint>
+  <link name="tesollo_right_palm_sensor_link2">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="tesollo_right_palm_sensor_joint3" type="fixed">
+    <origin xyz="0.02 0.02 0.14" rpy="0 1.5708 0" />
+    <parent link="tesollo_right_rl_dg_mount" />
+    <child link="tesollo_right_palm_sensor_link3" />
+  </joint>
+  <link name="tesollo_right_palm_sensor_link3">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- Finger 1 Sensor Links -->
+  <joint name="tesollo_right_finger_1_seg3_sensor_joint" type="fixed">
+    <origin xyz="0 0.015 0.0095" rpy="0 0 0" />
+    <parent link="tesollo_right_rl_dg_1_3" />
+    <child link="tesollo_right_finger_1_seg3_sensor_link" />
+  </joint>
+  <link name="tesollo_right_finger_1_seg3_sensor_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="tesollo_right_finger_1_tip_sensor_joint" type="fixed">
+    <origin xyz="0 0.045 0.01" rpy="-0.261799 0 0" />
+    <parent link="tesollo_right_rl_dg_1_4" />
+    <child link="tesollo_right_finger_1_tip_sensor_link" />
+  </joint>
+  <link name="tesollo_right_finger_1_tip_sensor_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- Finger 2 Sensor Links -->
+  <joint name="tesollo_right_finger_2_seg2_sensor_joint" type="fixed">
+    <origin xyz="0.0095 0 0.02" rpy="0 1.5708 0" />
+    <parent link="tesollo_right_rl_dg_2_2" />
+    <child link="tesollo_right_finger_2_seg2_sensor_link" />
+  </joint>
+  <link name="tesollo_right_finger_2_seg2_sensor_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="tesollo_right_finger_2_seg3_sensor_joint" type="fixed">
+    <origin xyz="0.0095 0 0.02" rpy="0 1.5708 0" />
+    <parent link="tesollo_right_rl_dg_2_3" />
+    <child link="tesollo_right_finger_2_seg3_sensor_link" />
+  </joint>
+  <link name="tesollo_right_finger_2_seg3_sensor_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="tesollo_right_finger_2_tip_sensor_joint" type="fixed">
+    <origin xyz="0.01 0 0.035" rpy="0 1.3089969389957472 0" />
+    <parent link="tesollo_right_rl_dg_2_4" />
+    <child link="tesollo_right_finger_2_tip_sensor_link" />
+  </joint>
+  <link name="tesollo_right_finger_2_tip_sensor_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- Finger 3 Sensor Links -->
+  <joint name="tesollo_right_finger_3_seg2_sensor_joint" type="fixed">
+    <origin xyz="0.0095 0 0.02" rpy="0 1.5708 0" />
+    <parent link="tesollo_right_rl_dg_3_2" />
+    <child link="tesollo_right_finger_3_seg2_sensor_link" />
+  </joint>
+  <link name="tesollo_right_finger_3_seg2_sensor_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="tesollo_right_finger_3_seg3_sensor_joint" type="fixed">
+    <origin xyz="0.0095 0 0.02" rpy="0 1.5708 0" />
+    <parent link="tesollo_right_rl_dg_3_3" />
+    <child link="tesollo_right_finger_3_seg3_sensor_link" />
+  </joint>
+  <link name="tesollo_right_finger_3_seg3_sensor_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="tesollo_right_finger_3_tip_sensor_joint" type="fixed">
+    <origin xyz="0.01 0 0.035" rpy="0 1.3089969389957472 0" />
+    <parent link="tesollo_right_rl_dg_3_4" />
+    <child link="tesollo_right_finger_3_tip_sensor_link" />
+  </joint>
+  <link name="tesollo_right_finger_3_tip_sensor_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- Finger 4 Sensor Links -->
+  <joint name="tesollo_right_finger_4_seg2_sensor_joint" type="fixed">
+    <origin xyz="0.0095 0 0.02" rpy="0 1.5708 0" />
+    <parent link="tesollo_right_rl_dg_4_2" />
+    <child link="tesollo_right_finger_4_seg2_sensor_link" />
+  </joint>
+  <link name="tesollo_right_finger_4_seg2_sensor_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="tesollo_right_finger_4_seg3_sensor_joint" type="fixed">
+    <origin xyz="0.0095 0 0.02" rpy="0 1.5708 0" />
+    <parent link="tesollo_right_rl_dg_4_3" />
+    <child link="tesollo_right_finger_4_seg3_sensor_link" />
+  </joint>
+  <link name="tesollo_right_finger_4_seg3_sensor_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="tesollo_right_finger_4_tip_sensor_joint" type="fixed">
+    <origin xyz="0.01 0 0.035" rpy="0 1.3089969389957472 0" />
+    <parent link="tesollo_right_rl_dg_4_4" />
+    <child link="tesollo_right_finger_4_tip_sensor_link" />
+  </joint>
+  <link name="tesollo_right_finger_4_tip_sensor_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- Finger 5 Sensor Links -->
+  <joint name="tesollo_right_finger_5_seg3_sensor_joint" type="fixed">
+    <origin xyz="0.0095 0 0.02" rpy="0 1.5708 0" />
+    <parent link="tesollo_right_rl_dg_5_3" />
+    <child link="tesollo_right_finger_5_seg3_sensor_link" />
+  </joint>
+  <link name="tesollo_right_finger_5_seg3_sensor_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="tesollo_right_finger_5_tip_sensor_joint" type="fixed">
+    <origin xyz="0.01 0 0.045" rpy="0 1.3089969389957472 0" />
+    <parent link="tesollo_right_rl_dg_5_4" />
+    <child link="tesollo_right_finger_5_tip_sensor_link" />
+  </joint>
+  <link name="tesollo_right_finger_5_tip_sensor_link">
+    <inertial>
+      <mass value="0.001"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00001" iyz="0" izz="0.00001"/>
+    </inertial>
+    <visual>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.005" length="0.001" />
+      </geometry>
+    </collision>
+  </link>
+</robot>

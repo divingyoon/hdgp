@@ -1,0 +1,102 @@
+# Copyright 2025 Enactic, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Dual-head PPO configuration for bimanual pouring.
+#
+# This configuration uses separate encoders for left and right arms,
+# allowing rollout of pre-trained grasp policies (2g_grasp_left_v1, 2g_grasp_right_v1)
+# without distribution shift conflicts.
+#
+# Key parameters:
+# - dof_split_index: 8 (left arm actions [0:8], right arm actions [8:])
+# - actor_obs_split_index: 40 (left obs [0:40], right obs [40:])
+# - separate_actor_encoders: True (each arm has its own encoder)
+
+seed: 42
+
+
+# Dual-head models
+models:
+  separate: True
+  policy:
+    class: sbm.rl.skrl_models:DualHeadGaussianModel
+    clip_actions: False
+    clip_log_std: True
+    min_log_std: -20.0
+    max_log_std: 2.0
+    initial_log_std: 0.0
+    actor_hidden_dims: [256, 128, 64]
+    activation: elu
+    # Action space split: left arm [0:8], right arm [8:]
+    dof_split_index: 8
+    # Observation space split: left obs [0:40], right obs [40:]
+    actor_obs_split_index: 40
+    separate_actor_encoders: true
+    separate_noise_std: True
+  value:
+    class: sbm.rl.skrl_models:DualHeadValueModel
+    clip_actions: False
+    critic_hidden_dims: [256, 128, 64]
+    activation: elu
+    dual_critic: True
+    critic_obs_split_index: 40
+    separate_critic_encoders: true
+
+
+# Rollout memory
+memory:
+  class: RandomMemory
+  memory_size: -1
+
+
+# PPO agent configuration
+agent:
+  class: PPO
+  rollouts: 24
+  learning_epochs: 5
+  mini_batches: 4
+  discount_factor: 0.99
+  lambda: 0.95
+  learning_rate: 5.0e-04
+  learning_rate_scheduler: KLAdaptiveLR
+  learning_rate_scheduler_kwargs:
+    kl_threshold: 0.01
+  state_preprocessor: RunningStandardScaler
+  state_preprocessor_kwargs: null
+  value_preprocessor: RunningStandardScaler
+  value_preprocessor_kwargs: null
+  random_timesteps: 0
+  learning_starts: 0
+  grad_norm_clip: 1.0
+  ratio_clip: 0.2
+  value_clip: 0.2
+  clip_predicted_values: True
+  entropy_loss_scale: 0.01
+  value_loss_scale: 2.0
+  kl_threshold: 0.0
+  rewards_shaper_scale: 1.0
+  time_limit_bootstrap: False
+  # logging and checkpoint
+  experiment:
+    directory: "pipeline/both/2g_pouring_v1_dualhead"
+    experiment_name: ""
+    write_interval: auto
+    checkpoint_interval: auto
+
+
+# Sequential trainer
+trainer:
+  class: SequentialTrainer
+  timesteps: 24000
+  environment_info: log

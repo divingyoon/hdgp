@@ -1,0 +1,143 @@
+{
+  "issue_to_overrides": {
+    "no_learning": [
+      "env.rewards.left_reaching_object.weight=-2.0",
+      "env.rewards.right_reaching_object.weight=-2.0",
+      "env.rewards.left_reaching_object_fine.weight=10.0",
+      "env.rewards.right_reaching_object_fine.weight=10.0"
+    ],
+    "training_collapse": [
+      "env.rewards.left_reaching_object.weight=-1.0",
+      "env.rewards.right_reaching_object.weight=-1.0",
+      "env.rewards.left_reaching_object_fine.weight=8.0",
+      "env.rewards.right_reaching_object_fine.weight=8.0"
+    ],
+    "low_lift_success": [
+      "env.rewards.left_lifting_object.weight=8.0",
+      "env.rewards.right_lifting_object.weight=8.0",
+      "env.rewards.left_grasping_object.weight=8.0",
+      "env.rewards.right_grasping_object.weight=8.0"
+    ],
+    "tracking_fail": [
+      "env.rewards.left_object_goal_tracking.weight=3.0",
+      "env.rewards.right_object_goal_tracking.weight=3.0"
+    ],
+    "tracking_dist_high": [
+      "env.rewards.left_object_goal_tracking_fine_grained.weight=3.0",
+      "env.rewards.right_object_goal_tracking_fine_grained.weight=3.0"
+    ],
+    "reward_conflict_displacement_vs_reaching": [
+      "env.rewards.left_object_displacement_penalty.params.phase_weights=[0.0,1.0,0.0,0.0]",
+      "env.rewards.right_object_displacement_penalty.params.phase_weights=[0.0,1.0,0.0,0.0]",
+      "env.rewards.left_object_displacement_penalty.weight=-2.0",
+      "env.rewards.right_object_displacement_penalty.weight=-2.0",
+      "env.rewards.left_object_displacement_penalty.params.scale=5.0",
+      "env.rewards.right_object_displacement_penalty.params.scale=5.0"
+    ],
+    "reaching_stuck": [
+      "env.rewards.left_reaching_object.weight=-3.0",
+      "env.rewards.right_reaching_object.weight=-3.0",
+      "env.rewards.left_reaching_object_fine.weight=10.0",
+      "env.rewards.right_reaching_object_fine.weight=10.0",
+      "env.rewards.left_object_displacement_penalty.params.phase_weights=[0.0,1.0,0.0,0.0]",
+      "env.rewards.right_object_displacement_penalty.params.phase_weights=[0.0,1.0,0.0,0.0]"
+    ],
+    "hand_inactive": [
+      "env.rewards.left_grasping_object.weight=8.0",
+      "env.rewards.right_grasping_object.weight=8.0"
+    ],
+    "phase_stuck": [
+      "env.rewards.left_reaching_object.weight=-3.0",
+      "env.rewards.right_reaching_object.weight=-3.0",
+      "env.rewards.left_reaching_object_fine.weight=10.0",
+      "env.rewards.right_reaching_object_fine.weight=10.0"
+    ],
+    "grasp_never_triggered": [
+      "env.rewards.left_reaching_object.weight=-3.0",
+      "env.rewards.right_reaching_object.weight=-3.0",
+      "env.rewards.left_object_displacement_penalty.params.phase_weights=[0.0,1.0,0.0,0.0]",
+      "env.rewards.right_object_displacement_penalty.params.phase_weights=[0.0,1.0,0.0,0.0]"
+    ],
+
+    "gripper_premature_close": [
+      "env.rewards.left_grasping_object.params.close_min=0.2",
+      "env.rewards.right_grasping_object.params.close_min=0.2",
+      "env.rewards.left_grasping_object.params.close_max=0.6",
+      "env.rewards.right_grasping_object.params.close_max=0.6",
+      "env.rewards.left_reaching_object_fine.params.phase_weights=[1.0,0.5,0.0,0.0]",
+      "env.rewards.right_reaching_object_fine.params.phase_weights=[1.0,0.5,0.0,0.0]"
+    ],
+
+    "phase_transition_too_strict": [
+      "env.phase_stability_reach_steps=5",
+      "env.phase_stability_grasp_steps=3",
+      "env.phase_stability_lift_steps=2"
+    ],
+
+    "phase_transition_very_strict": [
+      "env.phase_stability_reach_steps=3",
+      "env.phase_stability_grasp_steps=2",
+      "env.phase_stability_lift_steps=1",
+      "env.rewards.left_reaching_object.params.phase_params.reach_distance=0.12",
+      "env.rewards.right_reaching_object.params.phase_params.reach_distance=0.12"
+    ],
+
+    "bimanual_sync_penalty_too_high": [
+      "env.rewards.bimanual_phase_lag.weight=-0.3",
+      "env.rewards.bimanual_grasp_xor.weight=-1.0",
+      "env.rewards.bimanual_grasp_and.weight=4.0"
+    ],
+
+    "episode_too_short": [
+      "env.episode_length_s=12.0"
+    ],
+
+    "reach_distance_too_tight": [
+      "env.rewards.left_reaching_object.params.phase_params.reach_distance=0.12",
+      "env.rewards.right_reaching_object.params.phase_params.reach_distance=0.12",
+      "env.rewards.left_reaching_object.params.phase_params.grasp_distance=0.08",
+      "env.rewards.right_reaching_object.params.phase_params.grasp_distance=0.08"
+    ],
+
+    "fine_reaching_std_too_narrow": [
+      "env.rewards.left_reaching_object_fine.params.std_xy=0.2",
+      "env.rewards.right_reaching_object_fine.params.std_xy=0.2",
+      "env.rewards.left_reaching_object_fine.params.std_z=0.15",
+      "env.rewards.right_reaching_object_fine.params.std_z=0.15"
+    ],
+
+    "curriculum_too_fast": [
+      "env.curriculum.left_reaching_object.params.num_steps=5000",
+      "env.curriculum.right_reaching_object.params.num_steps=5000",
+      "env.curriculum.left_reaching_object_fine.params.num_steps=5000",
+      "env.curriculum.right_reaching_object_fine.params.num_steps=5000"
+    ],
+
+    "entropy_collapse": [
+      "env.rewards.left_reaching_object.weight=-0.5",
+      "env.rewards.right_reaching_object.weight=-0.5",
+      "env.rewards.bimanual_phase_lag.weight=-0.2"
+    ],
+
+    "eef_stalled": [
+      "env.rewards.left_reaching_object.weight=-0.3",
+      "env.rewards.right_reaching_object.weight=-0.3",
+      "env.rewards.left_reaching_object_fine.weight=12.0",
+      "env.rewards.right_reaching_object_fine.weight=12.0",
+      "env.rewards.left_reaching_object_fine.params.std_xy=0.25",
+      "env.rewards.right_reaching_object_fine.params.std_xy=0.25"
+    ],
+
+    "bimanual_phase_desync": [
+      "env.rewards.bimanual_phase_lag.weight=-0.5",
+      "env.rewards.bimanual_reach_min.weight=8.0"
+    ],
+
+    "lift_height_too_high": [
+      "env.rewards.left_lifting_object.params.lift_height=0.05",
+      "env.rewards.right_lifting_object.params.lift_height=0.05",
+      "env.rewards.left_grasping_object.params.phase_params.lift_height=0.05",
+      "env.rewards.right_grasping_object.params.phase_params.lift_height=0.05"
+    ]
+  }
+}

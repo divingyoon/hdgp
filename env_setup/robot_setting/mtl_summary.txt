@@ -1,0 +1,461 @@
+MTL summary for /home/user/rl_ws/env_setup/robot_setting/meshes
+Total .mtl files: 147
+
+ll_dg_1_1_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_1_2_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_1_3_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_1_4_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_1_tip_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_2_1_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_2_2_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_2_3_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_2_4_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_2_tip_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_3_1_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_3_2_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_3_3_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_3_4_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_3_tip_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_4_1_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_4_2_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_4_3_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_4_4_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_4_tip_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_5_1_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_5_2_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_5_3_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_5_4_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_5_tip_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_base_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_mount_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+ll_dg_palm_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+mount.mtl (materials: 1)
+  - mount: Kd=0.050000 0.050000 0.050000, Ka=1.0 1.0 1.0, Ks=0.2 0.2 0.2, Ns=10.0, Tf=None, d=0.3
+
+openarm_body_link0_collision_mesh.mtl (materials: 1)
+  - DefaultMaterial_0: Kd=0.6274510025978088 0.6274510025978088 0.6274510025978088, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_body_link0_visual_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=0.2 0.2 0.2, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_left_link0_collision_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_left_link0_visual_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=0.094120 0.094120 0.094120, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_left_link1_collision_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_left_link1_visual_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_left_link2_collision_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_left_link2_visual_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=0.247060 0.247060 0.247060, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_left_link3_collision_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_left_link3_visual_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_left_link4_collision_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_left_link4_visual_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_left_link5_collision_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_left_link5_visual_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_left_link6_collision_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_left_link6_visual_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_left_link7_collision_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_left_link7_visual_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_right_link0_collision_mesh.mtl (materials: 1)
+  - DefaultMaterial_0: Kd=0.6274510025978088 0.6274510025978088 0.6274510025978088, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_right_link0_visual_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=0.094120 0.094120 0.094120, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_right_link1_collision_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_right_link1_visual_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_right_link2_collision_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_right_link2_visual_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=0.247060 0.247060 0.247060, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_right_link3_collision_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_right_link3_visual_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_right_link4_collision_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_right_link4_visual_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_right_link5_collision_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_right_link5_visual_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_right_link6_collision_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_right_link6_visual_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_right_link7_collision_mesh.mtl (materials: 1)
+  - DefaultMaterial_0: Kd=0.6274510025978088 0.6274510025978088 0.6274510025978088, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+openarm_right_link7_visual_mesh.mtl (materials: 1)
+  - DefaultMaterial: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_1_1_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_1_2_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_1_3_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_1_4_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_1_tip_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_2_1_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_2_2_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_2_3_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_2_4_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_2_tip_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_3_1_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_3_2_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_3_3_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_3_4_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_3_tip_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_4_1_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_4_2_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_4_3_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_4_4_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_4_tip_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_5_1_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_5_2_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_5_3_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_5_4_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_5_tip_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_base_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_mount_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+rl_dg_palm_c_mesh.mtl (materials: 1)
+  - Material_3: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_1_1_visuals_ll_dg_1_1_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_1_2_visuals_ll_dg_1_2_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_1_3_visuals_ll_dg_1_3_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_1_4_visuals_ll_dg_1_4_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_1_4_visuals_ll_dg_1_tip_mesh.mtl (materials: 1)
+  - Material_004: Kd=0.800000 0.800000 0.800000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_2_1_visuals_ll_dg_2_1_mesh.mtl (materials: 2)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+  - Material_3: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_2_2_visuals_ll_dg_2_2_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_2_3_visuals_ll_dg_2_3_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_2_4_visuals_ll_dg_2_4_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_2_4_visuals_ll_dg_2_tip_mesh.mtl (materials: 1)
+  - Material_004: Kd=0.800000 0.800000 0.800000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_3_1_visuals_ll_dg_3_1_mesh.mtl (materials: 2)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+  - Material_3: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_3_2_visuals_ll_dg_3_2_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_3_3_visuals_ll_dg_3_3_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_3_4_visuals_ll_dg_3_4_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_3_4_visuals_ll_dg_3_tip_mesh.mtl (materials: 1)
+  - Material_004: Kd=0.800000 0.800000 0.800000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_4_1_visuals_ll_dg_4_1_mesh.mtl (materials: 2)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+  - Material_3: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_4_2_visuals_ll_dg_4_2_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_4_3_visuals_ll_dg_4_3_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_4_4_visuals_ll_dg_4_4_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_4_4_visuals_ll_dg_4_tip_mesh.mtl (materials: 1)
+  - Material_004: Kd=0.800000 0.800000 0.800000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_5_1_visuals_ll_dg_5_1_mesh.mtl (materials: 2)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+  - Material_3: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_5_2_visuals_ll_dg_5_2_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_5_3_visuals_ll_dg_5_3_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_5_4_visuals_ll_dg_5_4_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_5_4_visuals_ll_dg_5_tip_mesh.mtl (materials: 1)
+  - Material_004: Kd=0.800000 0.800000 0.800000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_mount_visuals_ll_dg_base_mesh.mtl (materials: 4)
+  - Material_2: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+  - Material_001: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+  - Material_003: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+  - Material_004: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_mount_visuals_ll_dg_mount_mesh.mtl (materials: 1)
+  - Material_001: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_left_ll_dg_mount_visuals_ll_dg_palm_mesh.mtl (materials: 3)
+  - Material_3: Kd=0.956860 0.956860 0.960780, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+  - Material_001: Kd=0.956860 0.956860 0.960780, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+  - Material_004: Kd=0.956860 0.956860 0.960780, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_1_1_visuals_rl_dg_1_1_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_1_2_visuals_rl_dg_1_2_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_1_3_visuals_rl_dg_1_3_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_1_4_visuals_rl_dg_1_4_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_1_4_visuals_rl_dg_1_tip_mesh.mtl (materials: 1)
+  - Material_004: Kd=0.800000 0.800000 0.800000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_2_1_visuals_rl_dg_2_1_mesh.mtl (materials: 2)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+  - Material_3: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_2_2_visuals_rl_dg_2_2_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_2_3_visuals_rl_dg_2_3_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_2_4_visuals_rl_dg_2_4_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_2_4_visuals_rl_dg_2_tip_mesh.mtl (materials: 1)
+  - Material_004: Kd=0.800000 0.800000 0.800000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_3_1_visuals_rl_dg_3_1_mesh.mtl (materials: 2)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+  - Material_3: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_3_2_visuals_rl_dg_3_2_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_3_3_visuals_rl_dg_3_3_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_3_4_visuals_rl_dg_3_4_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_3_4_visuals_rl_dg_3_tip_mesh.mtl (materials: 1)
+  - Material_004: Kd=0.800000 0.800000 0.800000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_4_1_visuals_rl_dg_4_1_mesh.mtl (materials: 2)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+  - Material_3: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_4_2_visuals_rl_dg_4_2_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_4_3_visuals_rl_dg_4_3_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_4_4_visuals_rl_dg_4_4_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_4_4_visuals_rl_dg_4_tip_mesh.mtl (materials: 1)
+  - Material_004: Kd=0.800000 0.800000 0.800000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_5_1_visuals_rl_dg_5_1_mesh.mtl (materials: 2)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+  - Material_3: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_5_2_visuals_rl_dg_5_2_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_5_3_visuals_rl_dg_5_3_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_5_4_visuals_rl_dg_5_4_mesh.mtl (materials: 1)
+  - Material_001: Kd=0.200000 0.200000 0.170000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_5_4_visuals_rl_dg_5_tip_mesh.mtl (materials: 1)
+  - Material_004: Kd=0.800000 0.800000 0.800000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_mount_visuals_rl_dg_base_mesh.mtl (materials: 4)
+  - Material_2: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+  - Material_001: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+  - Material_003: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+  - Material_004: Kd=0.000000 0.000000 0.000000, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_mount_visuals_rl_dg_mount_mesh.mtl (materials: 1)
+  - Material_001: Kd=1.0 1.0 1.0, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+
+tesollo_right_rl_dg_mount_visuals_rl_dg_palm_mesh.mtl (materials: 3)
+  - Material_3: Kd=0.956860 0.956860 0.960780, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+  - Material_001: Kd=0.956860 0.956860 0.960780, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0
+  - Material_4: Kd=0.956860 0.956860 0.960780, Ka=1.0 1.0 1.0, Ks=0.5 0.5 0.5, Ns=10.0, Tf=1.0 1.0 1.0, d=1.0

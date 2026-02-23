@@ -1,0 +1,22 @@
+env_setup/reachability/output/
+__pycache__/
+*.pyc
+*.pyo
+*.pt
+*.pth
+*.onnx
+*.ckpt
+*.log
+.env
+ .venv/
+ .vscode/
+.idea/
+log/
+runs/
+**/__pycache__/
+
+# Ignore all contents of the log directory by default
+log/*
+data
+# ignore run artifacts
+atuo/runs/
