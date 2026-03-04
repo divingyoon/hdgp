@@ -52,29 +52,27 @@ import openarm.tasks.manager_based.openarm_manipulation.pipeline.hand.both.grasp
 import openarm.tasks.manager_based.openarm_manipulation.pipeline.gripper.both.grasp_2g.config
 import openarm.tasks.manager_based.openarm_manipulation.pipeline.gripper.both.grasp_2g.grasp_2g_env_cfg
 
-#primitive skills/grasp_2g_v1
-import openarm.tasks.manager_based.openarm_manipulation.primitive_skills.grasp_2g_v1.config
-import openarm.tasks.manager_based.openarm_manipulation.primitive_skills.grasp_2g_v1.grasp2g_v1_env_cfg
-
-#primitive skills/reach_ik,grasp_ik,transfer_ik,pour_ik
-import openarm.tasks.manager_based.openarm_manipulation.primitive_skills.ReachIK.config
-import openarm.tasks.manager_based.openarm_manipulation.primitive_skills.GraspIK.config
-import openarm.tasks.manager_based.openarm_manipulation.primitive_skills.TransferIK.config
-import openarm.tasks.manager_based.openarm_manipulation.primitive_skills.PourIK.config
+try:
+    import openarm.tasks.manager_based.openarm_manipulation.primitive_skills.grasp_2g_v1.config
+    import openarm.tasks.manager_based.openarm_manipulation.primitive_skills.grasp_2g_v1.grasp2g_v1_env_cfg
+    import openarm.tasks.manager_based.openarm_manipulation.primitive_skills.ReachIK.config
+    import openarm.tasks.manager_based.openarm_manipulation.primitive_skills.GraspIK.config
+    import openarm.tasks.manager_based.openarm_manipulation.primitive_skills.TransferIK.config
+    import openarm.tasks.manager_based.openarm_manipulation.primitive_skills.PourIK.config
+except ModuleNotFoundError:
+    pass
 
 # pipeline/gripper/left/2g_grasp_left_v1
 # NOTE: module segment starts with a digit, so standard `import ...` syntax is invalid.
-importlib.import_module(
-    "openarm.tasks.manager_based.openarm_manipulation.pipeline.gripper.left.2g_grasp_left_v1.config"
-)
-importlib.import_module(
-    "openarm.tasks.manager_based.openarm_manipulation.pipeline.gripper.right.2g_grasp_right_v1.config"
-)
-
-# pipeline/gripper/both/2g_pouring_v1
-importlib.import_module(
-    "openarm.tasks.manager_based.openarm_manipulation.pipeline.gripper.both.2g_pouring_v1.config"
-)
+for _mod in [
+    "openarm.tasks.manager_based.openarm_manipulation.pipeline.gripper.left.2g_grasp_left_v1.config",
+    "openarm.tasks.manager_based.openarm_manipulation.pipeline.gripper.right.2g_grasp_right_v1.config",
+    "openarm.tasks.manager_based.openarm_manipulation.pipeline.gripper.both.2g_pouring_v1.config",
+]:
+    try:
+        importlib.import_module(_mod)
+    except (ModuleNotFoundError, ImportError):
+        pass
 
 # pipeline/hand/*: auto import all task config modules
 _TASKS_ROOT = Path(__file__).resolve().parent
@@ -86,11 +84,7 @@ for cfg_init in sorted(_HAND_ROOT.glob("**/config/__init__.py")):
         continue
     rel_module = module_path.split(marker, 1)[1].replace("/", ".")
     module_name = f"openarm.tasks.{rel_module}"
-    importlib.import_module(module_name)
-
-# blending/pouring,pouring1,pouring2,pouring3,pouring4
-import openarm.tasks.manager_based.openarm_manipulation.blending.pouring.config
-import openarm.tasks.manager_based.openarm_manipulation.blending.pouring1.config
-import openarm.tasks.manager_based.openarm_manipulation.blending.pouring2.config
-import openarm.tasks.manager_based.openarm_manipulation.blending.pouring3.config
-import openarm.tasks.manager_based.openarm_manipulation.blending.pouring4.config
+    try:
+        importlib.import_module(module_name)
+    except (ModuleNotFoundError, ImportError):
+        pass
