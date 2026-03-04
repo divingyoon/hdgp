@@ -71,33 +71,36 @@ HAND_GRASP_POSE = [
 
 # ---------------------------------------------------------------------------
 # Arm Start Pose (OpenArm right arm)
-# FK(q) → palm 예상 위치 ≈ (0.418, -0.157, 0.534)
-# palm_link +Z(손가락) ≈ (0.994, 0.088, -0.068) → 세계 +X(물체 방향)
+# +Y 접근을 위한 초기 관절 시드 (시뮬 기준으로 튜닝 필요)
+# palm 예상 위치 ≈ (0.42, -0.16, 0.53)
 # ---------------------------------------------------------------------------
-ARM_START_POSE = [1.0, -0.1, 0.0, 0.5, 0.0, 0.0, 0.0]
+ARM_START_POSE = [1.0, -0.1, 0.0, 0.5, 0.0, 0.0, -1.5708]  # j7=-π/2
 
 # ---------------------------------------------------------------------------
-# Palm Pose Workspace (OpenArm right arm, side-approach grasp)
-# 회전 중심: ez=0°, ey=+90°, ex=0° → palm_link +Z(손가락)가 세계 +X(물체) 방향
+# Palm Pose Workspace (OpenArm right arm, +Y approach grasp)
+# 회전 중심: ez=0°, ey=+90°, ex=0°
+#   - palm_center local +x(= palm_link +Y, out-of-palm)가 물체 +Y를 바라봄
+#   - 접근은 테이블 XY 평면과 평행한 -Y -> +Y 수평 이동
+#   - palm_link +Z(손가락)는 수평 +X 방향
 # ---------------------------------------------------------------------------
 def PALM_POSE_MINS_FUNC(max_pose_angle: float) -> list:
     """max_pose_angle(deg): 회전 중심에서 ±로 허용되는 각도."""
     d = math.pi / 180.0
     return [
-        0.20, -0.40, 0.30,                   # x, y, z [m]
-        (0.0   - max_pose_angle) * d,         # ez: 0° ± angle
-        (90.0  - max_pose_angle) * d,         # ey: +90° ± angle (손가락 → +X)
-        (0.0   - max_pose_angle) * d,         # ex: 0° ± angle
+        0.25, -0.50, 0.20,                    # x, y, z [m]  (y_min=-0.50: 물체(y=-0.15)로부터 충분히 -Y)
+        (0.0    - max_pose_angle) * d,         # ez: 0° ± angle
+        (90.0   - max_pose_angle) * d,         # ey: +90° ± angle
+        (0.0    - max_pose_angle) * d,         # ex: 0° ± angle
     ]
 
 
 def PALM_POSE_MAXS_FUNC(max_pose_angle: float) -> list:
     d = math.pi / 180.0
     return [
-        0.65,  0.10, 0.55,                   # x_max=0.65 (팔 뻗기), y_max=0.10 (왼팔 침범 방지)
-        (0.0   + max_pose_angle) * d,
-        (90.0  + max_pose_angle) * d,
-        (0.0   + max_pose_angle) * d,
+        0.70, -0.05, 0.60,                    # y_max=-0.05: 물체(y=-0.15)보다 약간 안쪽까지 허용
+        (0.0    + max_pose_angle) * d,
+        (90.0   + max_pose_angle) * d,
+        (0.0    + max_pose_angle) * d,
     ]
 
 

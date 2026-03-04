@@ -260,6 +260,32 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     )
 
     # -----------------------------------------------------------------------
+    # 머그 설정 (mug: 초기 위치는 scene 밖, reset 시 랜덤 배정)
+    # -----------------------------------------------------------------------
+    mug_cfg: RigidObjectCfg = RigidObjectCfg(
+        prim_path="/World/envs/env_.*/Mug",
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=[0.0, 0.0, -10.0],   # 초기에는 scene 밖 아래에 배치
+            rot=[1.0, 0.0, 0.0, 0.0],
+        ),
+        spawn=UsdFileCfg(
+            usd_path=_os.path.join(_ASSETS_DIR, "cup_bead/mug.usd"),
+            scale=(1.0, 1.0, 1.0),
+            articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+                articulation_enabled=False,
+            ),
+            rigid_props=RigidBodyPropertiesCfg(
+                solver_position_iteration_count=16,
+                solver_velocity_iteration_count=1,
+                max_angular_velocity=100.0,
+                max_linear_velocity=100.0,
+                max_depenetration_velocity=5.0,
+                disable_gravity=False,
+            ),
+        ),
+    )
+
+    # -----------------------------------------------------------------------
     # Hand body names (Isaac Sim USD 기준)
     # rj_dg_palm: rj_dg_palm joint를 revolute(range=0)으로 변경 → 별도 body 등록
     # -----------------------------------------------------------------------

@@ -18,6 +18,8 @@
   - palm pose 6D → Fabrics → arm 7 DOF joint target
   - finger 1D → open/grasp 선형 보간 → hand 20 DOF joint target
 
+물체: cup / mug 중 에피소드마다 랜덤 선택 (각 50%)
+
 리워드: KUKA_ALLEGRO 방식 4항목
   1. hand_to_object: 손 전체(palm+5 tips)가 물체에 고르게 접근
   2. object_to_goal: 물체 → 목표 위치
@@ -58,13 +60,14 @@ from .grasp_right_utils import scale, to_torch
 
 
 class GraspRightEnv(DirectRLEnv):
-    """OpenArm+Teosllo 오른손 단일 컵 파지 환경.
+    """OpenArm+Teosllo 오른손 파지 환경 (cup + mug 랜덤 선택).
 
     액션: 7D
       - [0:6] palm pose (x, y, z, ez, ey, ex), 정규화 [-1, 1]
       - [6]   finger (열림=-1, 닫힘=+1)
 
     Fabrics: arm(7 DOF)를 palm pose로 제어, hand(20 DOF)는 직접 보간.
+    에피소드마다 cup/mug 중 하나를 랜덤 배정, 나머지는 scene 밖으로 이동.
     """
 
     cfg: GraspRightEnvCfg
@@ -150,6 +153,11 @@ class GraspRightEnv(DirectRLEnv):
         self.actions = torch.zeros(self.num_envs, self.cfg.num_actions, device=self.device)
 
         # ----------------------------------------------------------------
+        # 물체 유형 추적: 0=cup, 1=mug (에피소드마다 랜덤)
+        # ----------------------------------------------------------------
+        self.active_object_type = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+
+        # ----------------------------------------------------------------
         # Fabrics 초기화 (arm 제어용)
         # ----------------------------------------------------------------
         self._setup_geometric_fabrics()
@@ -179,10 +187,12 @@ class GraspRightEnv(DirectRLEnv):
     def _setup_scene(self) -> None:
         self.robot = Articulation(self.cfg.robot_cfg)
         self.cup = RigidObject(self.cfg.cup_cfg)
+        self.mug = RigidObject(self.cfg.mug_cfg)
         self.table = RigidObject(self.cfg.table_cfg)
 
         self.scene.articulations["robot"] = self.robot
         self.scene.rigid_objects["cup"] = self.cup
+        self.scene.rigid_objects["mug"] = self.mug
         self.scene.rigid_objects["table"] = self.table
 
         spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
@@ -343,9 +353,15 @@ class GraspRightEnv(DirectRLEnv):
     # Intermediate values (공통 계산)
     # ------------------------------------------------------------------
     def _compute_intermediate_values(self) -> None:
-        # 물체 위치: world frame → env local frame
-        self.object_pos = self.cup.data.root_pos_w - self.scene.env_origins
-        self.object_rot = self.cup.data.root_quat_w
+        # 물체 위치: active object에 따라 cup/mug 선택, world → env local
+        cup_pos = self.cup.data.root_pos_w - self.scene.env_origins   # (N, 3)
+        mug_pos = self.mug.data.root_pos_w - self.scene.env_origins   # (N, 3)
+        cup_rot = self.cup.data.root_quat_w                           # (N, 4)
+        mug_rot = self.mug.data.root_quat_w                           # (N, 4)
+
+        use_mug = (self.active_object_type == 1).unsqueeze(1)         # (N, 1)
+        self.object_pos = torch.where(use_mug.expand(-1, 3), mug_pos, cup_pos)
+        self.object_rot = torch.where(use_mug.expand(-1, 4), mug_rot, cup_rot)
 
         # 손 위치: Fabrics FK (6 bodies × 3D = 18D)
         hand_pos_flat, _ = self.hand_points_taskmap(self.fabric_q, None)  # (N, 18)
@@ -423,6 +439,7 @@ class GraspRightEnv(DirectRLEnv):
         self.extras["max_hand_dist"] = max_dist.mean()
         self.extras["goal_dist"] = goal_dist.mean()
         self.extras["object_z"] = self.object_pos[:, 2].mean()
+        self.extras["mug_ratio"] = (self.active_object_type == 1).float().mean()
 
         return total
 
@@ -475,29 +492,40 @@ class GraspRightEnv(DirectRLEnv):
         self.fabric_qd[env_ids].zero_()
         self.fabric_qdd[env_ids].zero_()
 
-        # ---- 컵 위치 리셋 ----
-        cup_pos = torch.zeros(n, 3, device=self.device)
-        cup_pos[:, 0] = self.cfg.object_spawn_x_center + (
+        # ---- 물체 유형 랜덤 배정 (0=cup, 1=mug) ----
+        self.active_object_type[env_ids] = torch.randint(
+            0, 2, (n,), device=self.device, dtype=torch.long
+        )
+        is_cup = (self.active_object_type[env_ids] == 0)  # (n,) bool
+
+        # ---- 활성 물체 spawn 위치 (랜덤 ±xy 오프셋) ----
+        obj_x = self.cfg.object_spawn_x_center + (
             torch.rand(n, device=self.device) - 0.5
         ) * 2.0 * self.cfg.object_spawn_xy_range
-        cup_pos[:, 1] = self.cfg.object_spawn_y_center + (
+        obj_y = self.cfg.object_spawn_y_center + (
             torch.rand(n, device=self.device) - 0.5
         ) * 2.0 * self.cfg.object_spawn_xy_range
-        cup_pos[:, 2] = self.cfg.object_spawn_z
+        obj_pos_local = torch.stack([obj_x, obj_y,
+                                     torch.full((n,), self.cfg.object_spawn_z, device=self.device)], dim=1)
+        obj_pos_world = obj_pos_local + self.scene.env_origins[env_ids]  # (n, 3)
 
-        # world frame: env local + env origin
-        cup_pos_world = cup_pos + self.scene.env_origins[env_ids]
-        cup_rot = torch.zeros(n, 4, device=self.device)
-        cup_rot[:, 0] = 1.0  # quaternion w=1
+        # ---- inactive 물체는 scene 밖 아래로 이동 ----
+        offscene_pos = self.scene.env_origins[env_ids].clone()
+        offscene_pos[:, 2] -= 10.0  # env local z=-10m (테이블 아래)
 
-        # root state: [pos(3), quat(4), lin_vel(3), ang_vel(3)] = 13D, world frame
-        cup_root_state = torch.cat([
-            cup_pos_world,                              # pos (3)
-            cup_rot,                                    # quat (4)
-            torch.zeros(n, 6, device=self.device),      # vel (6)
-        ], dim=-1)  # (n, 13)
+        upright_rot = torch.zeros(n, 4, device=self.device)
+        upright_rot[:, 0] = 1.0   # w=1 (identity quaternion)
+        zero_vel = torch.zeros(n, 6, device=self.device)
 
+        # cup: active이면 spawn 위치, inactive이면 scene 밖
+        cup_pos_world = torch.where(is_cup.unsqueeze(1), obj_pos_world, offscene_pos)
+        cup_root_state = torch.cat([cup_pos_world, upright_rot, zero_vel], dim=-1)
         self.cup.write_root_state_to_sim(cup_root_state, env_ids=env_ids)
+
+        # mug: active이면 spawn 위치, inactive이면 scene 밖
+        mug_pos_world = torch.where(is_cup.unsqueeze(1), offscene_pos, obj_pos_world)
+        mug_root_state = torch.cat([mug_pos_world, upright_rot, zero_vel], dim=-1)
+        self.mug.write_root_state_to_sim(mug_root_state, env_ids=env_ids)
 
         # ---- 버퍼 초기화 ----
         self.actions[env_ids].zero_()
