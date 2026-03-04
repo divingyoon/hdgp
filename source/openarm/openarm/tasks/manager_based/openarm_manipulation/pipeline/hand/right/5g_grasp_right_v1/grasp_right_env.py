@@ -18,7 +18,7 @@
   - palm pose 6D → Fabrics → arm 7 DOF joint target
   - finger 1D → open/grasp 선형 보간 → hand 20 DOF joint target
 
-물체: cup / mug 중 에피소드마다 랜덤 선택 (각 50%)
+물체: cup / primitive 중 설정에 따라 사용
 
 리워드: KUKA_ALLEGRO 방식 4항목
   1. hand_to_object: 손 전체(palm+5 tips)가 물체에 고르게 접근
@@ -29,11 +29,12 @@
 
 from __future__ import annotations
 
+import os as _os
 import torch
 from collections.abc import Sequence
 
 import isaaclab.sim as sim_utils
-from isaaclab.assets import Articulation, RigidObject
+from isaaclab.assets import Articulation, RigidObject, RigidObjectCfg
 from isaaclab.envs import DirectRLEnv
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 
@@ -45,6 +46,7 @@ from fabrics_sim.worlds.world_mesh_model import WorldMeshesModel
 from fabrics_sim.utils.path_utils import get_robot_urdf_path
 from fabrics_sim.taskmaps.robot_frame_origins_taskmap import RobotFrameOriginsTaskMap
 
+from openarm.tasks.manager_based.openarm_manipulation import OPENARM_ROOT_DIR
 from .grasp_right_env_cfg import GraspRightEnvCfg
 from .grasp_right_constants import (
     NUM_ARM_DOF,
@@ -60,14 +62,14 @@ from .grasp_right_utils import scale, to_torch
 
 
 class GraspRightEnv(DirectRLEnv):
-    """OpenArm+Teosllo 오른손 파지 환경 (cup + mug 랜덤 선택).
+    """OpenArm+Teosllo 오른손 파지 환경.
 
     액션: 7D
       - [0:6] palm pose (x, y, z, ez, ey, ex), 정규화 [-1, 1]
       - [6]   finger (열림=-1, 닫힘=+1)
 
     Fabrics: arm(7 DOF)를 palm pose로 제어, hand(20 DOF)는 직접 보간.
-    에피소드마다 cup/mug 중 하나를 랜덤 배정, 나머지는 scene 밖으로 이동.
+    설정에 따라 cup/primitive 중 하나 또는 둘 다 활성화할 수 있다.
     """
 
     cfg: GraspRightEnvCfg
@@ -153,7 +155,7 @@ class GraspRightEnv(DirectRLEnv):
         self.actions = torch.zeros(self.num_envs, self.cfg.num_actions, device=self.device)
 
         # ----------------------------------------------------------------
-        # 물체 유형 추적: 0=cup, 1=mug (에피소드마다 랜덤)
+        # 물체 유형 추적: 0=cup, 1=primitive (둘 다 활성 시 에피소드마다 랜덤)
         # ----------------------------------------------------------------
         self.active_object_type = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
 
@@ -185,14 +187,17 @@ class GraspRightEnv(DirectRLEnv):
     # Scene 설정
     # ------------------------------------------------------------------
     def _setup_scene(self) -> None:
+        if (not self.cfg.enable_cup) and (not self.cfg.enable_primitives):
+            raise ValueError("At least one of enable_cup or enable_primitives must be True.")
+
         self.robot = Articulation(self.cfg.robot_cfg)
-        self.cup = RigidObject(self.cfg.cup_cfg)
-        self.mug = RigidObject(self.cfg.mug_cfg)
+        self.cup = RigidObject(self.cfg.cup_cfg) if self.cfg.enable_cup else None
+        self.primitive = None
         self.table = RigidObject(self.cfg.table_cfg)
 
         self.scene.articulations["robot"] = self.robot
-        self.scene.rigid_objects["cup"] = self.cup
-        self.scene.rigid_objects["mug"] = self.mug
+        if self.cup is not None:
+            self.scene.rigid_objects["cup"] = self.cup
         self.scene.rigid_objects["table"] = self.table
 
         spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
@@ -201,7 +206,49 @@ class GraspRightEnv(DirectRLEnv):
         light_cfg = sim_utils.DomeLightCfg(intensity=1000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
 
-        self.scene.clone_environments(copy_from_source=False)
+        # DEXTRAH와 동일하게 source prim을 기준으로 env 복제하여
+        # USD/scene 메모리 중복을 줄인다.
+        self.scene.clone_environments(copy_from_source=True)
+
+        if self.cfg.enable_primitives:
+            self._setup_random_primitives()
+
+    def _setup_random_primitives(self) -> None:
+        """Create one random primitive asset per env (DEXTRAH-style object bank spawn)."""
+        primitives_root = _os.path.join(OPENARM_ROOT_DIR, "../../../../../../assets/primitives/USD")
+        primitives_root = _os.path.normpath(primitives_root)
+        sub_dirs = sorted(
+            d for d in _os.listdir(primitives_root) if _os.path.isdir(_os.path.join(primitives_root, d))
+        )
+        if len(sub_dirs) == 0:
+            raise ValueError(f"No primitive folders found under: {primitives_root}")
+
+        sampled_ids = torch.randint(0, len(sub_dirs), (self.num_envs,), device=self.device).cpu().tolist()
+        for i in range(self.num_envs):
+            primitive_name = sub_dirs[sampled_ids[i]]
+            usd_path = _os.path.join(primitives_root, primitive_name, f"{primitive_name}.usd")
+            prim_path = f"/World/envs/env_{i}/Primitive/primitive_{i}_{primitive_name}"
+            object_cfg = RigidObjectCfg(
+                prim_path=prim_path,
+                spawn=sim_utils.UsdFileCfg(
+                    usd_path=usd_path,
+                    scale=self.cfg.primitive_cfg.spawn.scale,
+                    articulation_props=self.cfg.primitive_cfg.spawn.articulation_props,
+                    rigid_props=self.cfg.primitive_cfg.spawn.rigid_props,
+                ),
+                init_state=RigidObjectCfg.InitialStateCfg(
+                    pos=tuple(self.cfg.primitive_cfg.init_state.pos),
+                    rot=tuple(self.cfg.primitive_cfg.init_state.rot),
+                ),
+            )
+            _ = RigidObject(object_cfg)
+
+        primitive_regex_cfg = RigidObjectCfg(
+            prim_path="/World/envs/env_.*/Primitive/.*",
+            spawn=None,
+        )
+        self.primitive = RigidObject(primitive_regex_cfg)
+        self.scene.rigid_objects["primitive"] = self.primitive
 
     # ------------------------------------------------------------------
     # Geometric Fabrics 초기화 (DEXTRAH _setup_geometric_fabrics 기반)
@@ -212,7 +259,7 @@ class GraspRightEnv(DirectRLEnv):
 
         print("=== GraspRightEnv: Creating Fabrics world ===")
         world_filename = "open_tesollo_boxes"
-        max_objects_per_env = 20
+        max_objects_per_env = self.cfg.fabrics_max_objects_per_env
         self.world_model = WorldMeshesModel(
             batch_size=self.num_envs,
             max_objects_per_env=max_objects_per_env,
@@ -353,15 +400,21 @@ class GraspRightEnv(DirectRLEnv):
     # Intermediate values (공통 계산)
     # ------------------------------------------------------------------
     def _compute_intermediate_values(self) -> None:
-        # 물체 위치: active object에 따라 cup/mug 선택, world → env local
-        cup_pos = self.cup.data.root_pos_w - self.scene.env_origins   # (N, 3)
-        mug_pos = self.mug.data.root_pos_w - self.scene.env_origins   # (N, 3)
-        cup_rot = self.cup.data.root_quat_w                           # (N, 4)
-        mug_rot = self.mug.data.root_quat_w                           # (N, 4)
-
-        use_mug = (self.active_object_type == 1).unsqueeze(1)         # (N, 1)
-        self.object_pos = torch.where(use_mug.expand(-1, 3), mug_pos, cup_pos)
-        self.object_rot = torch.where(use_mug.expand(-1, 4), mug_rot, cup_rot)
+        # 물체 위치: cup/primitive 활성 상태에 따라 선택
+        if self.cup is not None and self.primitive is not None:
+            cup_pos = self.cup.data.root_pos_w - self.scene.env_origins           # (N, 3)
+            cup_rot = self.cup.data.root_quat_w                                    # (N, 4)
+            primitive_pos = self.primitive.data.root_pos_w - self.scene.env_origins  # (N, 3)
+            primitive_rot = self.primitive.data.root_quat_w                        # (N, 4)
+            use_primitive = (self.active_object_type == 1).unsqueeze(1)            # (N, 1)
+            self.object_pos = torch.where(use_primitive.expand(-1, 3), primitive_pos, cup_pos)
+            self.object_rot = torch.where(use_primitive.expand(-1, 4), primitive_rot, cup_rot)
+        elif self.cup is not None:
+            self.object_pos = self.cup.data.root_pos_w - self.scene.env_origins
+            self.object_rot = self.cup.data.root_quat_w
+        else:
+            self.object_pos = self.primitive.data.root_pos_w - self.scene.env_origins
+            self.object_rot = self.primitive.data.root_quat_w
 
         # 손 위치: Fabrics FK (6 bodies × 3D = 18D)
         hand_pos_flat, _ = self.hand_points_taskmap(self.fabric_q, None)  # (N, 18)
@@ -439,7 +492,12 @@ class GraspRightEnv(DirectRLEnv):
         self.extras["max_hand_dist"] = max_dist.mean()
         self.extras["goal_dist"] = goal_dist.mean()
         self.extras["object_z"] = self.object_pos[:, 2].mean()
-        self.extras["mug_ratio"] = (self.active_object_type == 1).float().mean()
+        if self.cup is not None and self.primitive is not None:
+            self.extras["primitive_ratio"] = (self.active_object_type == 1).float().mean()
+            self.extras["cup_ratio"] = (self.active_object_type == 0).float().mean()
+        else:
+            self.extras["primitive_ratio"] = torch.zeros((), device=self.device)
+            self.extras["cup_ratio"] = torch.ones((), device=self.device) if self.cup is not None else torch.zeros((), device=self.device)
 
         return total
 
@@ -492,11 +550,21 @@ class GraspRightEnv(DirectRLEnv):
         self.fabric_qd[env_ids].zero_()
         self.fabric_qdd[env_ids].zero_()
 
-        # ---- 물체 유형 랜덤 배정 (0=cup, 1=mug) ----
-        self.active_object_type[env_ids] = torch.randint(
-            0, 2, (n,), device=self.device, dtype=torch.long
-        )
-        is_cup = (self.active_object_type[env_ids] == 0)  # (n,) bool
+        # ---- 물체 유형 배정 ----
+        if self.cup is not None and self.primitive is not None:
+            self.active_object_type[env_ids] = torch.randint(
+                0, 2, (n,), device=self.device, dtype=torch.long
+            )
+            is_cup = (self.active_object_type[env_ids] == 0)  # (n,) bool
+            is_primitive = ~is_cup
+        elif self.cup is not None:
+            self.active_object_type[env_ids] = 0
+            is_cup = torch.ones(n, device=self.device, dtype=torch.bool)
+            is_primitive = torch.zeros(n, device=self.device, dtype=torch.bool)
+        else:
+            self.active_object_type[env_ids] = 1
+            is_cup = torch.zeros(n, device=self.device, dtype=torch.bool)
+            is_primitive = torch.ones(n, device=self.device, dtype=torch.bool)
 
         # ---- 활성 물체 spawn 위치 (랜덤 ±xy 오프셋) ----
         obj_x = self.cfg.object_spawn_x_center + (
@@ -518,14 +586,16 @@ class GraspRightEnv(DirectRLEnv):
         zero_vel = torch.zeros(n, 6, device=self.device)
 
         # cup: active이면 spawn 위치, inactive이면 scene 밖
-        cup_pos_world = torch.where(is_cup.unsqueeze(1), obj_pos_world, offscene_pos)
-        cup_root_state = torch.cat([cup_pos_world, upright_rot, zero_vel], dim=-1)
-        self.cup.write_root_state_to_sim(cup_root_state, env_ids=env_ids)
+        if self.cup is not None:
+            cup_pos_world = torch.where(is_cup.unsqueeze(1), obj_pos_world, offscene_pos)
+            cup_root_state = torch.cat([cup_pos_world, upright_rot, zero_vel], dim=-1)
+            self.cup.write_root_state_to_sim(cup_root_state, env_ids=env_ids)
 
-        # mug: active이면 spawn 위치, inactive이면 scene 밖
-        mug_pos_world = torch.where(is_cup.unsqueeze(1), offscene_pos, obj_pos_world)
-        mug_root_state = torch.cat([mug_pos_world, upright_rot, zero_vel], dim=-1)
-        self.mug.write_root_state_to_sim(mug_root_state, env_ids=env_ids)
+        # primitive: active이면 spawn 위치, inactive이면 scene 밖
+        if self.primitive is not None:
+            primitive_pos_world = torch.where(is_primitive.unsqueeze(1), obj_pos_world, offscene_pos)
+            primitive_root_state = torch.cat([primitive_pos_world, upright_rot, zero_vel], dim=-1)
+            self.primitive.write_root_state_to_sim(primitive_root_state, env_ids=env_ids)
 
         # ---- 버퍼 초기화 ----
         self.actions[env_ids].zero_()

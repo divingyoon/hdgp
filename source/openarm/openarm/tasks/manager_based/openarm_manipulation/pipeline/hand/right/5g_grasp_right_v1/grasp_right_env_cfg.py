@@ -56,7 +56,7 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     decimation: int = 2
     fabrics_dt: float = 1.0 / 60.0
     fabric_decimation: int = 2
-    use_cuda_graph: bool = True
+    use_cuda_graph: bool = False
 
     # -----------------------------------------------------------------------
     # 관측·액션 공간 (DirectRLEnvCfg 필수 필드)
@@ -75,6 +75,9 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     # -----------------------------------------------------------------------
     # Palm pose 워크스페이스 각도 한계 (deg): 회전 중심 ±
     max_pose_angle: float = 45.0
+    # Fabrics world에서 env당 보유할 최대 장애물 슬롯 수
+    # (활성 장애물 수보다 크게만 잡으면 됨. 과대 설정 시 메모리 낭비)
+    fabrics_max_objects_per_env: int = 6
 
     # -----------------------------------------------------------------------
     # 리워드 파라미터 (KUKA_ALLEGRO 방식)
@@ -101,6 +104,9 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     object_spawn_y_center: float = -0.15
     object_spawn_z: float = 0.38        # visdex 물체 z_min=-0.076 기준 안전 높이
     object_spawn_xy_range: float = 0.08  # ±0.08m 균등 분포
+    # 물체 활성 플래그
+    enable_cup: bool = True
+    enable_primitives: bool = False
 
     # 성공 기준: 물체가 goal 0.1m 이내
     success_threshold: float = 0.10
@@ -113,11 +119,12 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
         render_interval=2,
         physx=sim_utils.PhysxCfg(
             bounce_threshold_velocity=0.01,
-            gpu_found_lost_aggregate_pairs_capacity=64 * 1024 * 1024,
-            gpu_total_aggregate_pairs_capacity=16 * 1024 * 1024,
-            gpu_max_rigid_patch_count=2**23,
-            gpu_max_rigid_contact_count=2**23,
-            gpu_collision_stack_size=2**23,
+            # 과도한 선할당을 줄여 DRAM/VRAM 압박 완화
+            gpu_found_lost_aggregate_pairs_capacity=8 * 1024 * 1024,
+            gpu_total_aggregate_pairs_capacity=2 * 1024 * 1024,
+            gpu_max_rigid_patch_count=2**22,
+            gpu_max_rigid_contact_count=2**22,
+            gpu_collision_stack_size=2**22,
             gpu_max_num_partitions=8,
             friction_correlation_distance=0.00625,
         ),
@@ -260,16 +267,16 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     )
 
     # -----------------------------------------------------------------------
-    # 머그 설정 (mug: 초기 위치는 scene 밖, reset 시 랜덤 배정)
+    # Primitive 설정 (초기 위치는 scene 밖, reset 시 랜덤 배정)
     # -----------------------------------------------------------------------
-    mug_cfg: RigidObjectCfg = RigidObjectCfg(
-        prim_path="/World/envs/env_.*/Mug",
+    primitive_cfg: RigidObjectCfg = RigidObjectCfg(
+        prim_path="/World/envs/env_.*/Primitive",
         init_state=RigidObjectCfg.InitialStateCfg(
             pos=[0.0, 0.0, -10.0],   # 초기에는 scene 밖 아래에 배치
             rot=[1.0, 0.0, 0.0, 0.0],
         ),
         spawn=UsdFileCfg(
-            usd_path=_os.path.join(_ASSETS_DIR, "cup_bead/mug.usd"),
+            usd_path=_os.path.join(_ASSETS_DIR, "primitives/USD/small_5_cyl/small_5_cyl.usd"),
             scale=(1.0, 1.0, 1.0),
             articulation_props=sim_utils.ArticulationRootPropertiesCfg(
                 articulation_enabled=False,
