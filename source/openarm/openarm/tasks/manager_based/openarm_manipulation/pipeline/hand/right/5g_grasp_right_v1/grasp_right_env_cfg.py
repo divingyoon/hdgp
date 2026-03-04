@@ -100,8 +100,8 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     # -----------------------------------------------------------------------
     # 물체 spawn
     # -----------------------------------------------------------------------
-    object_spawn_x_center: float = 0.55
-    object_spawn_y_center: float = -0.15
+    object_spawn_x_center: float = 0.4
+    object_spawn_y_center: float = -0.05
     object_spawn_z: float = 0.38        # visdex 물체 z_min=-0.076 기준 안전 높이
     object_spawn_xy_range: float = 0.08  # ±0.08m 균등 분포
     # 물체 활성 플래그
