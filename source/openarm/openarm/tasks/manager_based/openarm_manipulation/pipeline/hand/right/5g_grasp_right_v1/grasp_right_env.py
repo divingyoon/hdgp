@@ -234,6 +234,18 @@ class GraspRightEnv(DirectRLEnv):
         self.open_tesollo_fabric.default_config.copy_(cspace_default)
 
         # ----------------------------------------------------------------
+        # 초기 액션: ARM_START_POSE에서의 FK palm pose를 역스케일
+        # self.actions.zero_() → workspace 중심(z=0.40m) 타겟 → arm이 위로 당겨짐
+        # arm_start_action으로 초기화하면 Fabrics가 ARM_START_POSE 부근에 머뭄
+        # ----------------------------------------------------------------
+        _q_start = self.robot_start_joint_pos[:1]   # (1, 27)
+        _palm_start = self.open_tesollo_fabric.get_palm_pose(_q_start, "euler_zyx")  # (1, 6)
+        _range = self.palm_maxs - self.palm_mins     # (6,)
+        self.arm_start_action = (
+            (_palm_start[0] - self.palm_mins) / _range * 2.0 - 1.0
+        ).clamp(-1.0, 1.0)  # (6,)
+
+        # ----------------------------------------------------------------
         # Hand FK taskmap (Fabrics URDF 기준, 8 bodies)
         # ----------------------------------------------------------------
         robot_dir_name = "openarm_tesollo"
@@ -742,7 +754,7 @@ class GraspRightEnv(DirectRLEnv):
             self.primitive.write_root_state_to_sim(primitive_root_state, env_ids=env_ids)
 
         # ---- 버퍼 초기화 ----
-        self.actions[env_ids].zero_()
+        self.actions[env_ids] = self.arm_start_action.unsqueeze(0).expand(n, -1)
         # palm_dist_buf: reward 계산용, 리셋 시 큰 값으로 초기화 (손가락 완전 열림)
         self.palm_dist_buf[env_ids] = self.cfg.approach_trigger_dist
         # interp_hand: 열린 자세로 초기화

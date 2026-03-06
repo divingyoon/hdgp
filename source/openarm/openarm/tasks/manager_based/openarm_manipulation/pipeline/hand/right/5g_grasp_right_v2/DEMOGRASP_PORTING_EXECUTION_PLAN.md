@@ -151,7 +151,7 @@
 
 진행 상태:
 - [x] D-smoke(quick) 8-case 실행 완료 (`/tmp/phaseD_reports_quick/summary.json`)
-- [ ] D-smoke(full) 256 env × 2k~5k steps
+- [x] D-smoke(full) 256 env × 2048 steps 8-case 완료 (`/tmp/phaseD_reports_full/summary.json`)
 - [ ] KPI 기반 튜닝 목록 확정
 
 ## 5.1 Smoke Test
