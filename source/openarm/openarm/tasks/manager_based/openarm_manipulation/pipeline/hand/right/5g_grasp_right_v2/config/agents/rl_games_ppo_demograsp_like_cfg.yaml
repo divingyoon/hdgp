@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# 5g_grasp_right_v1 rl_games PPO 설정
-# 기반: DEXTRAH rl_games_ppo_lstm_cfg.yaml + 5g_lift_right_v1 스타일
-# 네트워크: MLP (단순 파지 태스크, LSTM 불필요)
-# 관측: 145D, 액션: 6D (palm only, 손가락은 자동 보간)
+# 5g_grasp_right_v2 rl_games PPO (DemoGrasp-like) 설정
+# 목적: DemoGrasp PPOOneStep 경향을 rl_games 범위 내에서 근사
+# 참고: 완전 동일 재현은 아님 (ppo_onestep 고유 update 루프 차이 존재)
 
 params:
   seed: 42
@@ -44,7 +43,8 @@ params:
           val: 0
         fixed_sigma: True
     mlp:
-      units: [512, 256, 128]
+      # DemoGrasp policy/vf hid sizes와 유사한 대형 MLP
+      units: [1024, 1024, 512, 512]
       activation: elu
       d2rl: False
       initializer:
@@ -56,7 +56,7 @@ params:
   load_path: ''
 
   config:
-    name: 5g_grasp_right_v1
+    name: 5g_grasp_right_v2_demograsp_like
     env_name: rlgpu
     device: 'cuda:0'
     device_name: 'cuda:0'
@@ -68,28 +68,35 @@ params:
     value_bootstrap: True
     num_actors: -1
     reward_shaper:
-      scale_value: 0.01
+      # DemoGrasp는 별도 reward scaling을 강하게 두지 않음
+      scale_value: 1.0
     normalize_advantage: True
-    gamma: 0.998          # DEXTRAH 기준: 장기 보상 중시
+
+    # DemoGrasp 근사 hyper-params
+    gamma: 0.96
     tau: 0.95
     learning_rate: 3e-4
     lr_schedule: adaptive
     schedule_type: legacy
-    kl_threshold: 0.01
+    kl_threshold: 0.016
+    entropy_coef: 0.0
+    e_clip: 0.2
+    mini_epochs: 5
+    critic_coef: 2.0
+
+    # PPOOneStep(nsteps=1) 근사: 짧은 rollout
+    horizon_length: 1
+    # total batch = num_envs * horizon_length. 기본 2048 env에서 full-batch 업데이트.
+    minibatch_size: 2048
+
     score_to_win: 100000000
     max_epochs: 20000
     save_best_after: 100
     save_frequency: 50
     print_stats: True
     grad_norm: 1.0
-    entropy_coef: 0.001
     truncate_grads: True
-    e_clip: 0.2
-    horizon_length: 16     # 2048 envs × 16 = 32768 samples/iter
-    minibatch_size: 16384  # 32768 / 2
-    mini_epochs: 8
-    critic_coef: 4
     clip_value: True
     clip_actions: False
-    seq_len: 4
+    seq_len: 1
     bounds_loss_coef: 0.0001

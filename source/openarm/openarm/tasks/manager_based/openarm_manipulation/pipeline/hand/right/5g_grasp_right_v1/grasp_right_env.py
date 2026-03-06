@@ -16,17 +16,19 @@
 
 컨트롤 방식: Geometric Fabrics (DEXTRAH 연계)
   - palm pose 6D → Fabrics → arm 7 DOF joint target
-  - finger: palm_dist 기반 자동 보간 (action 없음)
-    palm이 approach_trigger_dist일 때 OPEN, 0m일 때 GRASP로 선형 보간
+  - finger: palm_dist 기반 자동 보간 (action 없음, A안)
+    t = 1 - clamp(palm_dist / approach_trigger_dist, 0, 1)
+    interp = (1-t)*HAND_START_POSE + t*HAND_GRASP_POSE
+    Fabrics 실행 후 fabric_q의 hand 부분(index 7~26)을 override
 
 물체: cup / primitive 중 설정에 따라 사용
 
-리워드:
-  1. hand_to_object: palm_center가 물체 파지점에 가까워질수록 보상
-  2. object_to_goal: 물체 → 목표 위치 (approach_trigger 시 활성)
-  3. lift: 물체 수직 들기 (approach_trigger 시 활성)
-  4. finger_curl_reg: proximity-gated 파지 자세 보상
-  5. palm_orient: 손바닥 법선이 물체를 향하도록 유도
+리워드 (DEXTRAH와 동일 구조: 모든 항 항상 활성, 게이트 없음):
+  1. hand_to_object: palm_center → 파지점 접근 유도
+  2. palm_orient: 손바닥 법선이 컵을 향하도록 유도 (side-approach 전용)
+  3. finger_curl_reg: 보간 목표(interp_hand) 이탈 패널티 (음수 weight)
+  4. object_to_goal: 물체 → 목표 위치
+  5. lift: 물체 수직 들기
 """
 
 from __future__ import annotations
@@ -64,13 +66,12 @@ from fabrics_sim.taskmaps.robot_frame_origins_taskmap import RobotFrameOriginsTa
 
 from openarm.tasks.manager_based.openarm_manipulation import OPENARM_ROOT_DIR
 from .grasp_right_env_cfg import GraspRightEnvCfg
+from .grasp_adr import GraspADR
 from .grasp_right_constants import (
     NUM_ARM_DOF,
     NUM_HAND_DOF,
     HAND_START_POSE,
     HAND_GRASP_POSE,
-    HAND_PCA_MINS,
-    HAND_PCA_MAXS,
     ARM_START_POSE,
     OBJECT_GOAL_POS,
     PALM_POSE_MINS_FUNC,
@@ -82,11 +83,11 @@ from .grasp_right_utils import scale, to_torch
 class GraspRightEnv(DirectRLEnv):
     """OpenArm+Teosllo 오른손 파지 환경.
 
-    액션: 7D
+    액션: 6D
       - [0:6] palm pose (x, y, z, ez, ey, ex), 정규화 [-1, 1]
-      - [6]   finger (열림=-1, 닫힘=+1)
 
-    Fabrics: arm(7 DOF)를 palm pose로 제어, hand(20 DOF)는 직접 보간.
+    Fabrics: arm(7 DOF)를 palm pose로 제어.
+    hand(20 DOF)는 palm_dist 기반 자동 보간 (HAND_START_POSE → HAND_GRASP_POSE).
     설정에 따라 cup/primitive 중 하나 또는 둘 다 활성화할 수 있다.
     """
 
@@ -124,16 +125,13 @@ class GraspRightEnv(DirectRLEnv):
         )
 
         # ----------------------------------------------------------------
-        # Hand poses (DEXTRAH 방식)
+        # Hand poses (palm_dist 기반 자동 보간)
         # ----------------------------------------------------------------
-        self.grasp_pose = to_torch(HAND_GRASP_POSE, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)  # (N, 20)
+        self.hand_open_pose  = to_torch(HAND_START_POSE, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)  # (N, 20)
+        self.grasp_pose      = to_torch(HAND_GRASP_POSE, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)  # (N, 20)
 
         # reward 계산용 (20,)
         self.grasp_pose_target = to_torch(HAND_GRASP_POSE, device=self.device)  # (20,)
-
-        # PCA action 범위 (DEXTRAH 방식)
-        self.hand_pca_mins = to_torch(HAND_PCA_MINS, device=self.device)  # (5,)
-        self.hand_pca_maxs = to_torch(HAND_PCA_MAXS, device=self.device)  # (5,)
 
         # ----------------------------------------------------------------
         # 로봇 시작 자세: 손가락 열린 상태 (컵 소환 영역 관통 방지)
@@ -175,18 +173,24 @@ class GraspRightEnv(DirectRLEnv):
         # ----------------------------------------------------------------
         self.object_pos = torch.zeros(self.num_envs, 3, device=self.device)
         self.object_rot = torch.zeros(self.num_envs, 4, device=self.device)
-        self.hand_pos = torch.zeros(self.num_envs, 7, 3, device=self.device)  # 7 bodies × 3D
+        # hand_pos: Fabrics FK (7 bodies × 3D): [0]=palm_center, [1]=palm_x, [2:7]=fingertips
+        self.hand_pos = torch.zeros(self.num_envs, 7, 3, device=self.device)
         self.palm_center_pos = torch.zeros(self.num_envs, 3, device=self.device)
         self.palm_x_pos = torch.zeros(self.num_envs, 3, device=self.device)   # palm +X 방향 마커
         self.fingertip_pos = torch.zeros(self.num_envs, 5, 3, device=self.device)
         self.actions = torch.zeros(self.num_envs, self.cfg.num_actions, device=self.device)
         # grasp_target: _compute_intermediate_values에서 계산, _pre_physics_step에서 참조
         self.grasp_target = torch.zeros(self.num_envs, 3, device=self.device)
+        # interp_hand: palm_dist 기반 보간 결과 (N, 20), _pre_physics_step에서 계산
+        self.interp_hand = self.hand_open_pose.clone()
         # palm_dist_buf: 이전 스텝의 palm_dist 캐시 (_pre_physics_step에서 자동 닫힘 계산용)
         # 초기값: approach_trigger_dist (완전히 열린 상태로 시작)
         self.palm_dist_buf = torch.full(
             (self.num_envs,), self.cfg.approach_trigger_dist, device=self.device
         )
+        # finger_t_buf: ratchet mechanism — 에피소드 내 최대 닫힘 t값 누적
+        # palm이 위로 올라가도 이전 최대값 유지 → 들어올리는 동안 파지 유지
+        self.finger_t_buf = torch.zeros(self.num_envs, device=self.device)
 
         # ----------------------------------------------------------------
         # 물체 유형 추적: 0=cup, 1=primitive (둘 다 활성 시 에피소드마다 랜덤)
@@ -202,16 +206,30 @@ class GraspRightEnv(DirectRLEnv):
         self._cup_tipping_cos = math.cos(math.radians(self.cfg.cup_tipping_max_deg))
 
         # ----------------------------------------------------------------
+        # ADR 초기화 (GraspADR: DEXTRAH DextrahADR 이식)
+        # ----------------------------------------------------------------
+        if cfg.enable_adr:
+            self.grasp_adr = GraspADR(
+                custom_cfg=cfg.adr_custom_cfg,
+                num_increments=cfg.adr_num_increments,
+                increment_interval=cfg.adr_increment_interval,
+                trigger_threshold=cfg.adr_trigger_threshold,
+            )
+        else:
+            self.grasp_adr = None
+
+        # ----------------------------------------------------------------
         # Fabrics 초기화 (arm 제어용)
         # ----------------------------------------------------------------
         self._setup_geometric_fabrics()
 
         # ----------------------------------------------------------------
-        # Fabrics cspace attractor를 GRASP_POSE로 고정 (DEXTRAH curled_q에 해당)
-        # PCA attractor는 에이전트가 5D action으로 직접 제어
+        # Fabrics cspace attractor를 HAND_START_POSE (열린 자세)로 설정
+        # 손가락은 palm_dist 기반 자동 보간으로 fabric_q를 직접 override하므로
+        # cspace attractor는 arm 제어에만 실질적으로 영향을 미침
         # ----------------------------------------------------------------
         cspace_default = self.open_tesollo_fabric.default_config.clone()
-        cspace_default[:, NUM_ARM_DOF:] = self.grasp_pose
+        cspace_default[:, NUM_ARM_DOF:] = self.hand_open_pose
         self.open_tesollo_fabric.default_config.copy_(cspace_default)
 
         # ----------------------------------------------------------------
@@ -378,20 +396,17 @@ class GraspRightEnv(DirectRLEnv):
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
         self.actions = actions.clone()
 
-        # ---- 액션 파싱: 6D palm + 5D PCA (DEXTRAH 방식) ----
+        # ---- 액션 파싱: 6D palm only ----
         palm_action = actions[:, :6]   # (N, 6), 정규화 [-1, 1]
-        pca_action  = actions[:, 6:]   # (N, 5), 정규화 [-1, 1]
 
         # Palm pose 스케일 (정규화 → 실제 workspace)
         palm_pose = scale(palm_action, self.palm_mins, self.palm_maxs)  # (N, 6)
         self.palm_pose_targets.copy_(palm_pose)
 
-        # PCA hand 스케일 → Fabrics PCA attractor 직접 제어
-        # cspace attractor는 HAND_GRASP_POSE 고정 (default_config 불변)
-        hand_pca = scale(pca_action, self.hand_pca_mins, self.hand_pca_maxs)  # (N, 5)
-        self.hand_pca_targets.copy_(hand_pca)
+        # hand_pca_targets: 0 고정 (손가락은 자동 보간으로 제어)
+        self.hand_pca_targets.zero_()
 
-        # ---- Fabrics 실행 (arm + hand 제어) ----
+        # ---- Fabrics 실행 (arm 제어) ----
         if not self.cfg.use_cuda_graph:
             self.inputs = [
                 self.hand_pca_targets,
@@ -417,6 +432,22 @@ class GraspRightEnv(DirectRLEnv):
                 self.fabric_q.copy_(self.fabric_q_new)
                 self.fabric_qd.copy_(self.fabric_qd_new)
                 self.fabric_qdd.copy_(self.fabric_qdd_new)
+
+        # ---- palm_dist 기반 손가락 자동 보간 (Ratchet Mechanism) ----
+        # palm_dist_buf: 이전 스텝에서 계산된 palm_center ~ grasp_target 거리
+        # t_new = 1 - clamp(palm_dist / trigger, 0, 1)
+        # ratchet: finger_t_buf = max(finger_t_buf, t_new)
+        #   → palm이 위로 올라가도 한번 닫힌 손가락은 열리지 않음
+        #   → 들어올리는 동안 파지 유지
+        t_new = (1.0 - (self.palm_dist_buf / self.cfg.approach_trigger_dist).clamp(0.0, 1.0))  # (N,)
+        torch.max(self.finger_t_buf, t_new, out=self.finger_t_buf)  # ratchet, in-place
+        t = self.finger_t_buf.unsqueeze(1)  # (N, 1)
+        # in-place 보간: interp_hand 버퍼 재사용
+        self.interp_hand.copy_(self.hand_open_pose)
+        self.interp_hand.mul_(1.0 - t)
+        self.interp_hand.add_(t * self.grasp_pose)
+        self.fabric_q[:, NUM_ARM_DOF:] = self.interp_hand
+        self.fabric_qd[:, NUM_ARM_DOF:].zero_()
 
     def _apply_action(self) -> None:
         # 오른팔+오른손: Fabrics가 arm + hand (27D) 모두 제어
@@ -465,7 +496,7 @@ class GraspRightEnv(DirectRLEnv):
 
         # grasp_target 및 palm_dist_buf 업데이트
         # → 다음 스텝의 _pre_physics_step에서 자동 닫힘 계산에 사용
-        self.grasp_target = self.object_pos.clone()
+        self.grasp_target.copy_(self.object_pos)
         self.grasp_target[:, 2] += self.cfg.object_grasp_z_offset
         self.palm_dist_buf.copy_((self.palm_center_pos - self.grasp_target).norm(dim=-1))
 
@@ -488,11 +519,11 @@ class GraspRightEnv(DirectRLEnv):
             # 목표 위치
             self.object_goal,                                           # (N, 3)
             # 마지막 액션
-            self.actions,                                               # (N, 7)
+            self.actions,                                               # (N, 6)
             # Fabrics 상태 (arm 추론용)
             self.fabric_q,                                              # (N, 27)
             self.fabric_qd,                                             # (N, 27)
-        ], dim=-1)  # (N, 150)
+        ], dim=-1)  # (N, 145)
 
         return {"policy": obs, "critic": obs}
 
@@ -500,97 +531,105 @@ class GraspRightEnv(DirectRLEnv):
     # Rewards
     # ------------------------------------------------------------------
     def _get_rewards(self) -> torch.Tensor:
-        # ---- 1. hand_to_object (palm_center only) ----
-        # grasp_target, palm_dist: _compute_intermediate_values에서 이미 계산됨
-        grasp_target = self.grasp_target   # (N, 3)
-        palm_dist = self.palm_dist_buf     # (N,)
+        # ---- ADR: DEXTRAH 동일 구조 ----
+        # lift_weight     : 5→0  (초기 강하게, ADR 진행에 따라 감소)
+        # goal_sharpness  : 15→20 (점점 정밀 요구)
+        # curl_weight     : -2→-1 (패널티 완화)
+        # object_to_goal_weight: 5.0 고정 (DEXTRAH 동일, ADR 대상 아님)
+        if self.grasp_adr is not None:
+            lift_weight        = self.grasp_adr.get_param("reward_weights", "lift_weight")
+            finger_curl_weight = self.grasp_adr.get_param("reward_weights", "finger_curl_weight")
+            goal_sharpness     = self.grasp_adr.get_param("sharpness", "object_to_goal_sharpness")
+        else:
+            lift_weight        = self.cfg.lift_weight
+            finger_curl_weight = self.cfg.finger_curl_weight
+            goal_sharpness     = self.cfg.object_to_goal_sharpness
 
+        # ---- 공통 참조 ----
+        grasp_target = self.grasp_target  # (N, 3)
+        palm_dist = self.palm_dist_buf    # (N,)
+
+        # ---- 1. hand_to_object: palm_center → grasp_target ----
+        # DEXTRAH: max over 6 hand points / v1: palm_dist (side-approach 전용)
         hand_to_obj_reward = self.cfg.hand_to_object_weight * torch.exp(
             -self.cfg.hand_to_object_sharpness * palm_dist
         )
 
-        # ---- 2. object_to_goal ----
+        # ---- 2. palm orientation (side-approach 전용) ----
+        # 손바닥 법선(palm +X)이 컵을 향하도록 유도
+        palm_x_dir = torch.nn.functional.normalize(
+            self.palm_x_pos - self.palm_center_pos, dim=-1
+        )  # (N, 3)
+        palm_to_cup = torch.nn.functional.normalize(
+            grasp_target - self.palm_center_pos, dim=-1
+        )  # (N, 3)
+        align = (palm_x_dir * palm_to_cup).sum(dim=-1)  # (N,) ∈ [-1, 1]
+        palm_orient_reward = self.cfg.palm_orient_weight * align
+
+        # ---- 3. finger curl (DEXTRAH R_curl 동일 방식) ----
+        # w_curl * mean((q_hand - q_interp)²), w_curl < 0
+        # DEXTRAH: 고정 q_curled / v1: palm_dist 기반 동적 q_interp (side-approach 전용)
+        hand_q = self.robot.data.joint_pos[:, self.hand_dof_indices]  # (N, 20)
+        curl_error = (hand_q - self.interp_hand).pow(2).mean(dim=-1)  # (N,)
+        curl_reg = finger_curl_weight * curl_error  # ADR: -2→-1 (완화)
+
+        # ---- 4. object_to_goal (DEXTRAH: weight 5.0 고정, sharpness ADR로 증가) ----
         goal_dist = (self.object_pos - self.object_goal).norm(dim=-1)  # (N,)
         obj_to_goal_reward = self.cfg.object_to_goal_weight * torch.exp(
-            -self.cfg.object_to_goal_sharpness * goal_dist
+            -goal_sharpness * goal_dist  # ADR: 15→20
         )
 
-        # ---- 3. lift ----
+        # ---- 5. lift (DEXTRAH: weight ADR로 5→0 감소, sharpness 8.5 고정) ----
         lift_error = (self.object_pos[:, 2] - self.object_goal[:, 2]).abs()  # (N,)
-        lift_reward = self.cfg.lift_weight * torch.exp(
+        lift_reward = lift_weight * torch.exp(  # ADR: 5→0
             -self.cfg.lift_sharpness * lift_error
         )
 
-        # ---- 4. finger_curl_reg (DEXTRAH 방식) ----
-        # cspace attractor = HAND_GRASP_POSE 고정 → 손가락이 자연히 파지 방향으로 당겨짐
-        # 에이전트는 PCA action으로 손가락 조정
-        # proximity-gated: palm이 컵에 가까울 때 grasp_pose에 가까울수록 보상
-        hand_q = self.robot.data.joint_pos[:, self.hand_dof_indices]  # (N, 20)
-        proximity = torch.exp(-self.cfg.curl_proximity_sharpness * palm_dist)
-
-        grasp_error = (hand_q - self.grasp_pose_target.unsqueeze(0)).pow(2).mean(dim=-1)
-
-        finger_grasp_reward = self.cfg.finger_grasp_weight * proximity * torch.exp(
-            -self.cfg.finger_grasp_sharpness * grasp_error
-        )
-        finger_open_reg = torch.zeros_like(finger_grasp_reward)  # 제거 (cspace attractor가 대체)
-
-        curl_reg = finger_grasp_reward
-
-        # ---- 5. palm orientation reward ----
-        # palm +X (손바닥 법선) 방향이 컵을 향하도록 유도
-        palm_x_dir = torch.nn.functional.normalize(
-            self.palm_x_pos - self.palm_center_pos, dim=-1
-        )  # (N, 3): 손바닥 법선 방향 (world frame)
-
-        palm_to_cup = torch.nn.functional.normalize(
-            grasp_target - self.palm_center_pos, dim=-1
-        )  # (N, 3): palm → 컵 파지 중심 방향
-
-        # 내적: 1=완벽 정렬, 0=수직, -1=반대 방향
-        align = (palm_x_dir * palm_to_cup).sum(dim=-1)  # (N,)
-        palm_orient_reward = self.cfg.palm_orient_weight * align
-
-        # ---- 바이너리 단계 게이트 ----
-        # approach_trigger: palm이 컵 근처(approach_trigger_dist)에 도달 → lift/goal 활성화
-        # cup_lifted 조건 제거: 파지 이전에 lift/goal 탐색 기회를 부여
-        #   - 자동 닫힘(palm_dist 기반)과 결합: palm 접근 → 손가락 자동 닫힘 → 파지 → 들기
-        #   - cup_tipping termination(60도)이 비정상적인 밀기 행동을 억제
-        approach_trigger = (palm_dist < self.cfg.approach_trigger_dist).float()  # (N,)
-        grasp_trigger = approach_trigger  # cup_lifted 조건 제거
-
-        # ---- 합산 ----
+        # ---- 합산 (DEXTRAH 동일 구조) ----
         total = (
-            hand_to_obj_reward                      # 항상 활성: 접근 유도
-            + curl_reg                              # proximity-gated: 파지 자세 유도
-            + palm_orient_reward                    # 항상 활성: 방향 정렬 유도
-            + grasp_trigger * obj_to_goal_reward    # approach_trigger 시 활성
-            + grasp_trigger * lift_reward           # approach_trigger 시 활성
+            hand_to_obj_reward   # 접근 유도
+            + palm_orient_reward # 방향 정렬 (side-approach 전용)
+            + curl_reg           # 파지 자세 패널티
+            + obj_to_goal_reward # 목표 위치 이동
+            + lift_reward        # 수직 들기
         )
+
+        # ---- ADR increment 트리거 ----
+        # 컵이 lift_adr_threshold(5cm) 이상 들린 env 비율이 threshold(10%) 초과 시 increment
+        if self.grasp_adr is not None:
+            lift_success_ratio = (
+                self.object_pos[:, 2] > self.cfg.object_spawn_z + self.cfg.lift_adr_threshold
+            ).float().mean()
+            self.grasp_adr.maybe_increment(lift_success_ratio)
 
         # 로깅
         self.extras["hand_to_object_reward"] = hand_to_obj_reward.mean()
-        self.extras["obj_to_goal_reward"] = obj_to_goal_reward.mean()
-        self.extras["lift_reward"] = lift_reward.mean()
-        self.extras["finger_grasp_reward"] = finger_grasp_reward.mean()
-        self.extras["finger_open_reg"] = finger_open_reg.mean()
-        self.extras["finger_curl_reg"] = curl_reg.mean()
         self.extras["palm_orient_reward"] = palm_orient_reward.mean()
         self.extras["palm_align"] = align.mean()
+        self.extras["curl_reg"] = curl_reg.mean()
+        self.extras["obj_to_goal_reward"] = obj_to_goal_reward.mean()
+        self.extras["lift_reward"] = lift_reward.mean()
         self.extras["palm_dist"] = palm_dist.mean()
         self.extras["goal_dist"] = goal_dist.mean()
         self.extras["object_z"] = self.object_pos[:, 2].mean()
-        self.extras["approach_trigger"] = approach_trigger.mean()
-        self.extras["grasp_trigger"] = grasp_trigger.mean()
-        # 자동 닫힘 정도 (0=완전열림, 1=완전닫힘)
-        finger_t = (1.0 - (palm_dist / self.cfg.approach_trigger_dist).clamp(0.0, 1.0))
-        self.extras["finger_t"] = finger_t.mean()
+        self.extras["finger_t"] = self.finger_t_buf.mean()
+        self.extras["adr_lift_weight"] = torch.tensor(lift_weight, device=self.device)
+        self.extras["adr_goal_sharpness"] = torch.tensor(goal_sharpness, device=self.device)
+        self.extras["adr_curl_weight"] = torch.tensor(finger_curl_weight, device=self.device)
+        self.extras["adr_progress"] = torch.tensor(
+            self.grasp_adr.progress if self.grasp_adr is not None else 0.0,
+            device=self.device,
+        )
         if self.cup is not None and self.primitive is not None:
             self.extras["primitive_ratio"] = (self.active_object_type == 1).float().mean()
             self.extras["cup_ratio"] = (self.active_object_type == 0).float().mean()
         else:
             self.extras["primitive_ratio"] = torch.zeros((), device=self.device)
-            self.extras["cup_ratio"] = torch.ones((), device=self.device) if self.cup is not None else torch.zeros((), device=self.device)
+            self.extras["cup_ratio"] = (
+                torch.ones((), device=self.device)
+                if self.cup is not None
+                else torch.zeros((), device=self.device)
+            )
 
         return total
 
@@ -703,5 +742,9 @@ class GraspRightEnv(DirectRLEnv):
 
         # ---- 버퍼 초기화 ----
         self.actions[env_ids].zero_()
-        # palm_dist_buf: reward 계산용, 리셋 시 큰 값으로 초기화
+        # palm_dist_buf: reward 계산용, 리셋 시 큰 값으로 초기화 (손가락 완전 열림)
         self.palm_dist_buf[env_ids] = self.cfg.approach_trigger_dist
+        # interp_hand: 열린 자세로 초기화
+        self.interp_hand[env_ids] = self.hand_open_pose[env_ids]
+        # finger_t_buf: ratchet 초기화 (에피소드 시작 = 완전 열림)
+        self.finger_t_buf[env_ids] = 0.0

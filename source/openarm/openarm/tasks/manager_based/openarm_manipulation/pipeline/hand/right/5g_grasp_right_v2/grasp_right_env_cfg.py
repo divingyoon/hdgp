@@ -31,6 +31,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files.from_files_cfg import UsdFileCfg, GroundPlaneCfg
 from isaaclab.sim.schemas.schemas_cfg import RigidBodyPropertiesCfg
+from isaaclab.sensors import ContactSensorCfg
 from isaaclab.utils import configclass
 
 import os as _os
@@ -67,7 +68,7 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     # -----------------------------------------------------------------------
     # 관측·액션 공간 (DirectRLEnvCfg 필수 필드)
     # -----------------------------------------------------------------------
-    observation_space: int = NUM_OBSERVATIONS  # 159
+    observation_space: int = NUM_OBSERVATIONS  # 255 (base 159 + object pc 96)
     action_space: int = NUM_ACTIONS            # 11 (6D palm + 5D PCA)
     state_space: int = NUM_OBSERVATIONS        # critic obs = policy obs (단순화)
 
@@ -75,6 +76,15 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     num_observations: int = NUM_OBSERVATIONS
     num_actions: int = NUM_ACTIONS
     num_states: int = NUM_OBSERVATIONS
+
+    # -----------------------------------------------------------------------
+    # Object point-cloud feature observation (Phase B)
+    # -----------------------------------------------------------------------
+    use_object_pc_feature: bool = True
+    object_pc_num_points: int = 32
+    object_pc_feature_scale: float = 0.25
+    object_pc_feature_clip: float = 4.0
+    object_pc_nan_guard: bool = True
 
     # -----------------------------------------------------------------------
     # Fabrics 파라미터
@@ -171,6 +181,25 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     pregrasp_orient_sharpness: float = 6.0
 
     # -----------------------------------------------------------------------
+    # Tracking reference replay (DemoGrasp trackingReferenceFile style)
+    # -----------------------------------------------------------------------
+    # True면 policy action 대신 시계열 레퍼런스를 재생한다.
+    use_reference_replay: bool = False
+    # .pkl/.pt/.pth 파일 경로. 상대경로면 OPENARM_ROOT_DIR 기준으로 해석.
+    tracking_reference_file: str = "assets/demograsp_references/normalized/grasp_ref_inspire_teosollo_pca5.pt"
+    # grasp-only 모드에서 참조 시퀀스를 이 step까지만 재생(-1이면 마지막까지).
+    tracking_reference_lift_timestep: int = -1
+    # 리셋 시 레퍼런스 시작 pose 랜덤화(객체 local frame 기준)
+    reference_pos_noise_x: float = 0.015
+    reference_pos_noise_y: float = 0.015
+    reference_pos_noise_z: float = 0.010
+    reference_orient_noise_ez_deg: float = 6.0
+    reference_orient_noise_ey_deg: float = 6.0
+    reference_orient_noise_ex_deg: float = 6.0
+    # 리셋 시 PCA 레퍼런스 바이어스(전 step 공통 오프셋)
+    reference_pca_noise_scale: float = 0.05
+
+    # -----------------------------------------------------------------------
     # Grasp-only stage (stage-3 split)
     # -----------------------------------------------------------------------
     grasp_only_mode: bool = True
@@ -183,6 +212,22 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     # grasp-only 단계에서는 lift/goal 보상을 0으로 두는 것이 기본
     grasp_only_goal_reward_scale: float = 0.0
     grasp_only_lift_reward_scale: float = 0.0
+
+    # -----------------------------------------------------------------------
+    # Tip contact sensing (DemoGrasp-style minimal)
+    # -----------------------------------------------------------------------
+    use_tip_contact_gate: bool = True
+    tip_object_contact_threshold: float = 0.02
+    tip_table_contact_threshold: float = 0.02
+    table_contact_penalty_weight: float = 0.5
+    right_tip_contact_links: tuple[str, ...] = (
+        "rl_dg_1_4",
+        "rl_dg_2_4",
+        "rl_dg_3_4",
+        "rl_dg_4_4",
+        "rl_dg_5_4",
+    )
+    tip_contact_sensor_history_length: int = 1
 
     # -----------------------------------------------------------------------
     # 컵 기울기 종료 (displacement_penalty 제거: h2o 모순 유발)
@@ -265,6 +310,7 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
         prim_path="/World/envs/env_.*/Robot",
         spawn=sim_utils.UsdFileCfg(
             usd_path=_os.path.join(_ASSETS_DIR, "openarm_modular_dual/openarm_modular_dual.usd"),
+            activate_contact_sensors=True,
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 disable_gravity=True,
                 max_depenetration_velocity=5.0,
@@ -325,6 +371,16 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
             ),
         },
         soft_joint_pos_limit_factor=1.0,
+    )
+
+    # Right hand distal single-body contact sensor template
+    # NOTE:
+    #   rl_dg_*_tip prim 자체는 rigid-body API가 없어 ContactSensor를 직접 부착할 수 없다.
+    #   따라서 rigid body인 rl_dg_*_4에 센서를 부착하고, 해당 바디 하위 tip collision(*_tip_c)을 포함해 측정한다.
+    tip_single_body_contact_sensor_cfg: ContactSensorCfg = ContactSensorCfg(
+        prim_path="/World/envs/env_.*/Robot/rl_dg_1_4",
+        history_length=1,
+        track_air_time=False,
     )
 
     # -----------------------------------------------------------------------

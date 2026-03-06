@@ -29,10 +29,10 @@ NUM_ROBOT_DOF = NUM_ARM_DOF + NUM_HAND_DOF  # 27
 
 # 6D palm pose action: [x, y, z, ez, ey, ex]
 NUM_PALM_POSE = 6
-# 5D PCA hand action (DEXTRAH 방식)
-NUM_PCA_ACTION = 5
+# 손가락은 palm_dist 기반 자동 보간 (action 없음)
+NUM_PCA_ACTION = 0
 # Total action dimensions
-NUM_ACTIONS = NUM_PALM_POSE + NUM_PCA_ACTION  # 11
+NUM_ACTIONS = NUM_PALM_POSE  # 6
 
 # ---------------------------------------------------------------------------
 # Hand Poses (DEXTRAH 방식)
@@ -69,14 +69,6 @@ HAND_GRASP_POSE = [
     0.0,  0.7,  0.5,  0.5,   # ring
     0.0,  0.0,  0.7,  0.5,   # pinky
 ]
-
-# ---------------------------------------------------------------------------
-# PCA Hand Action 범위 (DEXTRAH openarm_tesollo 기준)
-# 에이전트가 5D PCA action으로 손가락 자세를 직접 제어
-# cspace attractor(HAND_GRASP_POSE) + PCA attractor 조합으로 자연스러운 파지 유도
-# ---------------------------------------------------------------------------
-HAND_PCA_MINS = [0.0, -0.5, -1.0, -1.2, -0.5]
-HAND_PCA_MAXS = [3.5,  2.0,  1.0,  2.0,  2.0]
 
 # ---------------------------------------------------------------------------
 # Arm Start Pose (OpenArm right arm)
@@ -121,7 +113,7 @@ def PALM_POSE_MAXS_FUNC(max_pose_angle: float) -> list:
 # Object & Goal
 # ---------------------------------------------------------------------------
 # 단일 컵 spawn 중심 위치 (오른팔 작업공간 중앙)
-OBJECT_SPAWN_CENTER = [0.55, -0.15, 0.38]   # [x, y, z] palm 시작(x≈0.46) 앞에 배치
+OBJECT_SPAWN_CENTER = [0.55, -0.15, 0.30]   # [x, y, z] 테이블 top(0.25m) + 0.05m 여유
 OBJECT_SPAWN_RANGE_XY = 0.08                # ±0.08m 무작위 오프셋
 
 # 목표 위치: 컵을 들어 올릴 목표점
@@ -132,8 +124,8 @@ OBJECT_GOAL_POS = [0.55, -0.15, 0.65]       # z=0.65: 테이블 위 0.4m 들기
 # robot_dof_pos: 27, robot_dof_vel: 27
 # hand_pos (7 bodies × 3D): 21  ← palm_center + palm_x + 5 tips
 # object_pos: 3, object_rot: 4, goal_pos: 3
-# last_actions: 11  ← 6D palm + 5D PCA (DEXTRAH 방식)
+# last_actions: 6  ← 6D palm only (손가락은 자동 보간)
 # fabric_q: 27, fabric_qd: 27
-# Total: 150
+# Total: 145
 # ---------------------------------------------------------------------------
-NUM_OBSERVATIONS = 150
+NUM_OBSERVATIONS = 145

@@ -43,6 +43,8 @@ NUM_ROBOT_DOF = NUM_ARM_DOF + NUM_HAND_DOF
 NUM_PALM_POSE = 6
 NUM_PCA_ACTION = 5
 NUM_ACTIONS = NUM_PALM_POSE + NUM_PCA_ACTION
+NUM_OBJECT_PC_POINTS = 32
+NUM_OBJECT_PC_FEATURE = NUM_OBJECT_PC_POINTS * 3
 
 # v1 호환 alias
 ARM_START_POSE = RIGHT_ARM_START_POSE
@@ -55,8 +57,9 @@ PALM_POSE_MAXS_FUNC = palm_pose_maxs
 # hand_pos (7 bodies × 3D): 21
 # object_pos: 3, object_rot: 4, goal_pos: 3
 # object_init_pos: 3, pregrasp_delta: 3, pregrasp_target_x_dir: 3
+# object pc feature: 32 * 3 = 96
 # last_actions: 11
 # fabric_q: 27, fabric_qd: 27
-# Total: 159
+# Total: 255
 # ---------------------------------------------------------------------------
-NUM_OBSERVATIONS = 159
+NUM_OBSERVATIONS = 255

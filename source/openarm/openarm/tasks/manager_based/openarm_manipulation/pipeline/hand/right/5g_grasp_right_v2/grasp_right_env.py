@@ -33,7 +33,9 @@ from __future__ import annotations
 
 import math
 import os as _os
+import pickle
 import sys
+from typing import Any
 from pathlib import Path
 import torch
 from collections.abc import Sequence
@@ -51,6 +53,7 @@ for _parent in Path(__file__).resolve().parents:
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, RigidObject, RigidObjectCfg
 from isaaclab.envs import DirectRLEnv
+from isaaclab.sensors import ContactSensor, ContactSensorCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils.math import quat_apply
 
@@ -67,6 +70,8 @@ from .grasp_right_env_cfg import GraspRightEnvCfg
 from .grasp_right_constants import (
     NUM_ARM_DOF,
     NUM_HAND_DOF,
+    NUM_OBJECT_PC_FEATURE,
+    NUM_OBJECT_PC_POINTS,
     HAND_START_POSE,
     HAND_GRASP_POSE,
     HAND_PCA_MINS,
@@ -123,6 +128,206 @@ class GraspRightEnv(DirectRLEnv):
         qz = sz * cy * cx - cz * sy * sx
         quat = torch.stack((qw, qx, qy, qz), dim=-1)
         return torch.nn.functional.normalize(quat, dim=-1)
+
+    def _build_canonical_object_pc(self, num_points: int) -> torch.Tensor:
+        """Build a simple cup-like canonical point cloud in object local frame."""
+        if num_points <= 0:
+            raise ValueError("object_pc_num_points must be positive.")
+        ring_points = max(8, num_points // 2)
+        z_points = max(4, num_points - ring_points)
+        theta = torch.linspace(0.0, 2.0 * math.pi, steps=ring_points + 1, device=self.device)[:-1]
+        radius = 0.04
+        top_z = 0.06
+        bottom_z = -0.02
+        ring_top = torch.stack(
+            [radius * torch.cos(theta), radius * torch.sin(theta), torch.full_like(theta, top_z)], dim=-1
+        )
+        ring_bottom = torch.stack(
+            [radius * torch.cos(theta), radius * torch.sin(theta), torch.full_like(theta, bottom_z)], dim=-1
+        )
+        axis_z = torch.linspace(bottom_z, top_z, steps=z_points, device=self.device)
+        axis = torch.stack([torch.zeros_like(axis_z), torch.zeros_like(axis_z), axis_z], dim=-1)
+        pc = torch.cat([ring_top, ring_bottom, axis], dim=0)
+        if pc.shape[0] >= num_points:
+            return pc[:num_points].contiguous()
+        pad = pc[torch.randint(0, pc.shape[0], (num_points - pc.shape[0],), device=self.device)]
+        return torch.cat([pc, pad], dim=0).contiguous()
+
+    @staticmethod
+    def _unscale(x: torch.Tensor, mins: torch.Tensor, maxs: torch.Tensor) -> torch.Tensor:
+        """Scale workspace values back to normalized [-1, 1] action space."""
+        denom = (maxs - mins).clamp(min=1e-6)
+        return 2.0 * (x - mins) / denom - 1.0
+
+    @staticmethod
+    def _extract_2d_tensor(payload: dict[str, Any], candidates: list[str], cols: int) -> torch.Tensor | None:
+        """Find and convert a candidate sequence field to a (T, cols) float tensor."""
+        for key in candidates:
+            if key not in payload:
+                continue
+            tensor = torch.as_tensor(payload[key], dtype=torch.float32)
+            if tensor.ndim != 2 or tensor.shape[1] != cols:
+                continue
+            return tensor
+        return None
+
+    @staticmethod
+    def _quat_xyzw_to_euler_zyx(quat_xyzw: torch.Tensor) -> torch.Tensor:
+        """Convert xyzw quaternion to intrinsic ZYX Euler angles [ez, ey, ex]."""
+        x = quat_xyzw[:, 0]
+        y = quat_xyzw[:, 1]
+        z = quat_xyzw[:, 2]
+        w = quat_xyzw[:, 3]
+
+        t0 = 2.0 * (w * x + y * z)
+        t1 = 1.0 - 2.0 * (x * x + y * y)
+        ex = torch.atan2(t0, t1)
+
+        t2 = 2.0 * (w * y - z * x)
+        t2 = torch.clamp(t2, -1.0, 1.0)
+        ey = torch.asin(t2)
+
+        t3 = 2.0 * (w * z + x * y)
+        t4 = 1.0 - 2.0 * (y * y + z * z)
+        ez = torch.atan2(t3, t4)
+        return torch.stack([ez, ey, ex], dim=-1)
+
+    def _resolve_reference_path(self, file_path: str) -> Path:
+        """Resolve tracking reference path from cfg."""
+        path = Path(file_path).expanduser()
+        if path.is_absolute():
+            return path
+        root_candidate = Path(OPENARM_ROOT_DIR) / path
+        if root_candidate.exists():
+            return root_candidate
+        hdgp_root = (Path(OPENARM_ROOT_DIR) / "../../../../../../").resolve()
+        hdgp_candidate = hdgp_root / path
+        if hdgp_candidate.exists():
+            return hdgp_candidate
+        return (Path.cwd() / path).resolve()
+
+    def _project_hand_qpos_to_teosollo_pca(self, hand_qpos: torch.Tensor) -> torch.Tensor:
+        """Project hand joint sequence to 5D Teosollo PCA using least-squares pseudo-inverse."""
+        if not hasattr(self, "_teosollo_pca_basis"):
+            raise RuntimeError("Teosollo PCA basis is not initialized yet.")
+
+        basis = self._teosollo_pca_basis  # (5, 20)
+        src = hand_qpos.to(device=basis.device, dtype=basis.dtype)
+        src_dim = int(src.shape[1])
+
+        if src_dim == 27:
+            # Common full-q layout: [7 arm + 20 hand]
+            src = src[:, -NUM_HAND_DOF:]
+            src_dim = NUM_HAND_DOF
+
+        if src_dim == NUM_HAND_DOF:
+            pinv = torch.linalg.pinv(basis)  # (20, 5)
+            pca_seq = src @ pinv
+            print("[GraspRightEnv] projected hand_qpos(20) -> PCA(5) via pinv")
+            return pca_seq
+
+        if src_dim < NUM_HAND_DOF:
+            # Fallback assumption: source hand_qpos is aligned to Teosollo leading joints.
+            basis_sub = basis[:, :src_dim]          # (5, src_dim)
+            pinv_sub = torch.linalg.pinv(basis_sub)  # (src_dim, 5)
+            pca_seq = src @ pinv_sub
+            print(
+                "[GraspRightEnv] projected hand_qpos("
+                f"{src_dim}) -> PCA(5) via pinv on leading-joint subset"
+            )
+            return pca_seq
+
+        # src_dim > 20 (but not 27): truncate to 20 and project.
+        src = src[:, :NUM_HAND_DOF]
+        pinv = torch.linalg.pinv(basis)
+        pca_seq = src @ pinv
+        print(
+            "[GraspRightEnv] projected hand_qpos("
+            f"{src_dim}) -> PCA(5) after truncating to first {NUM_HAND_DOF} dims"
+        )
+        return pca_seq
+
+    def _load_tracking_reference(self) -> None:
+        """Load DemoGrasp-style tracking reference sequence from pkl/pt/pth file."""
+        path_str = self.cfg.tracking_reference_file.strip()
+        if not path_str:
+            raise ValueError("use_reference_replay=True requires tracking_reference_file to be set.")
+        ref_path = self._resolve_reference_path(path_str)
+        if not ref_path.exists():
+            raise FileNotFoundError(f"Tracking reference file not found: {ref_path}")
+
+        if ref_path.suffix in (".pt", ".pth"):
+            payload = torch.load(ref_path, map_location="cpu")
+        else:
+            with open(ref_path, "rb") as f:
+                payload = pickle.load(f)
+
+        palm_candidates = [
+            "palm_pose_targets",
+            "palm_pose",
+            "tracking_palm_pose",
+            "right_palm_pose",
+            "target_pose",
+        ]
+        pca_candidates = [
+            "hand_pca_targets",
+            "hand_pca",
+            "tracking_hand_pca",
+            "right_hand_pca",
+            "pca",
+        ]
+
+        if isinstance(payload, dict):
+            palm_seq = self._extract_2d_tensor(payload, palm_candidates, cols=6)
+            pca_seq = self._extract_2d_tensor(payload, pca_candidates, cols=5)
+            # DemoGrasp reference format:
+            # - wrist_initobj_pos: (T, 3)
+            # - wrist_quat       : (T, 4) in xyzw
+            # - hand_qpos        : (T, D)
+            if palm_seq is None and "wrist_initobj_pos" in payload and "wrist_quat" in payload:
+                wrist_pos = torch.as_tensor(payload["wrist_initobj_pos"], dtype=torch.float32)
+                wrist_quat = torch.as_tensor(payload["wrist_quat"], dtype=torch.float32)
+                if wrist_pos.ndim == 2 and wrist_pos.shape[1] == 3 and wrist_quat.ndim == 2 and wrist_quat.shape[1] == 4:
+                    wrist_euler = self._quat_xyzw_to_euler_zyx(wrist_quat)
+                    palm_seq = torch.cat([wrist_pos, wrist_euler], dim=-1)
+            if pca_seq is None and "hand_qpos" in payload:
+                hand_qpos = torch.as_tensor(payload["hand_qpos"], dtype=torch.float32)
+                if hand_qpos.ndim == 2:
+                    pca_seq = self._project_hand_qpos_to_teosollo_pca(hand_qpos)
+        elif isinstance(payload, (tuple, list)) and len(payload) >= 2:
+            palm_seq = torch.as_tensor(payload[0], dtype=torch.float32)
+            pca_seq = torch.as_tensor(payload[1], dtype=torch.float32)
+        else:
+            raise ValueError(
+                f"Unsupported tracking reference format ({type(payload)}). "
+                "Expected dict or (palm_seq, pca_seq) tuple/list."
+            )
+
+        if palm_seq is None or palm_seq.ndim != 2 or palm_seq.shape[1] != 6:
+            raise ValueError("tracking reference must include palm pose sequence with shape (T, 6).")
+        if pca_seq is None or pca_seq.ndim != 2 or pca_seq.shape[1] != 5:
+            raise ValueError("tracking reference must include hand PCA sequence with shape (T, 5).")
+
+        steps = min(palm_seq.shape[0], pca_seq.shape[0])
+        if steps <= 0:
+            raise ValueError("tracking reference sequence is empty.")
+
+        if palm_seq.shape[0] != pca_seq.shape[0]:
+            print(
+                "[GraspRightEnv] tracking reference length mismatch "
+                f"(palm={palm_seq.shape[0]}, pca={pca_seq.shape[0]}), trimming to {steps}"
+            )
+            palm_seq = palm_seq[:steps]
+            pca_seq = pca_seq[:steps]
+
+        self._reference_steps = int(steps)
+        self._reference_base_palm.copy_(palm_seq[0].to(self.device))
+        self._reference_palm_delta = (palm_seq - palm_seq[0:1]).to(self.device)
+        self._reference_pca_seq = pca_seq.to(self.device)
+        print(
+            "[GraspRightEnv] loaded tracking reference: "
+            f"path={ref_path}, steps={self._reference_steps}"
+        )
 
     def __init__(self, cfg: GraspRightEnvCfg, render_mode: str | None = None, **kwargs):
         # palm_dist_buf는 _setup_geometric_fabrics 이전에 필요하므로 먼저 초기화
@@ -200,6 +405,32 @@ class GraspRightEnv(DirectRLEnv):
         ey = torch.tensor([math.radians(self.cfg.pregrasp_orient_offset_ey_deg)], device=self.device)
         ex = torch.tensor([math.radians(self.cfg.pregrasp_orient_offset_ex_deg)], device=self.device)
         self.pregrasp_orient_offset_quat = self._quat_from_euler_zyx_wxyz(ez, ey, ex).squeeze(0)
+        self._reference_replay_enabled = bool(self.cfg.use_reference_replay)
+        self._reference_steps = 0
+        self._reference_base_palm = torch.zeros(6, device=self.device)
+        self._reference_palm_delta = torch.zeros(1, 6, device=self.device)
+        self._reference_pca_seq = torch.zeros(1, 5, device=self.device)
+        self.reference_anchor_palm = torch.zeros(self.num_envs, 6, device=self.device)
+        self.reference_pca_bias = torch.zeros(self.num_envs, 5, device=self.device)
+        self.reference_desired_palm_pose = torch.zeros(self.num_envs, 6, device=self.device)
+        self.reference_desired_hand_pca = torch.zeros(self.num_envs, 5, device=self.device)
+        self.reference_palm_saturation_ratio = torch.zeros(self.num_envs, device=self.device)
+        self.reference_pca_saturation_ratio = torch.zeros(self.num_envs, device=self.device)
+        self.reference_palm_tracking_error = torch.zeros(self.num_envs, device=self.device)
+        if self.cfg.object_pc_num_points != NUM_OBJECT_PC_POINTS:
+            raise ValueError(
+                f"object_pc_num_points must be {NUM_OBJECT_PC_POINTS} to match observation space."
+            )
+        self.object_pc_local = self._build_canonical_object_pc(self.cfg.object_pc_num_points)
+        self.object_pc_world = torch.zeros(self.num_envs, self.cfg.object_pc_num_points, 3, device=self.device)
+        self.object_pc_feature = torch.zeros(self.num_envs, NUM_OBJECT_PC_FEATURE, device=self.device)
+        self.object_pc_clip_ratio = torch.zeros(self.num_envs, device=self.device)
+        self.object_pc_invalid_ratio = torch.zeros(self.num_envs, device=self.device)
+        self.tip_contact_force = torch.zeros(self.num_envs, device=self.device)
+        self.tip_object_contact_force = torch.zeros(self.num_envs, device=self.device)
+        self.tip_table_contact_force = torch.zeros(self.num_envs, device=self.device)
+        self.tip_object_contact_mask = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self.tip_table_contact_mask = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
 
         # ----------------------------------------------------------------
         # 중간값 버퍼
@@ -245,6 +476,9 @@ class GraspRightEnv(DirectRLEnv):
         # Fabrics 초기화 (arm 제어용)
         # ----------------------------------------------------------------
         self._setup_geometric_fabrics()
+        self._teosollo_pca_basis = self.open_tesollo_fabric._pca_matrix.detach().clone().to(self.device)
+        if self._reference_replay_enabled:
+            self._load_tracking_reference()
 
         # ----------------------------------------------------------------
         # Fabrics cspace attractor를 GRASP_POSE로 고정 (DEXTRAH curled_q에 해당)
@@ -280,6 +514,27 @@ class GraspRightEnv(DirectRLEnv):
         if self.cup is not None:
             self.scene.rigid_objects["cup"] = self.cup
         self.scene.rigid_objects["table"] = self.table
+        self._tip_object_sensors: list[ContactSensor] = []
+        self._tip_table_sensors: list[ContactSensor] = []
+        for link_name in self.cfg.right_tip_contact_links:
+            object_sensor_cfg = ContactSensorCfg(
+                prim_path=f"/World/envs/env_.*/Robot/{link_name}",
+                filter_prim_paths_expr=["/World/envs/env_.*/Cup"],
+                history_length=self.cfg.tip_contact_sensor_history_length,
+                track_air_time=False,
+            )
+            table_sensor_cfg = ContactSensorCfg(
+                prim_path=f"/World/envs/env_.*/Robot/{link_name}",
+                filter_prim_paths_expr=["/World/envs/env_.*/Table"],
+                history_length=self.cfg.tip_contact_sensor_history_length,
+                track_air_time=False,
+            )
+            object_sensor = ContactSensor(object_sensor_cfg)
+            table_sensor = ContactSensor(table_sensor_cfg)
+            self._tip_object_sensors.append(object_sensor)
+            self._tip_table_sensors.append(table_sensor)
+            self.scene.sensors[f"tip_object_contact_sensor_{link_name}"] = object_sensor
+            self.scene.sensors[f"tip_table_contact_sensor_{link_name}"] = table_sensor
 
         spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
 
@@ -290,9 +545,33 @@ class GraspRightEnv(DirectRLEnv):
         # DEXTRAH와 동일하게 source prim을 기준으로 env 복제하여
         # USD/scene 메모리 중복을 줄인다.
         self.scene.clone_environments(copy_from_source=True)
-
         if self.cfg.enable_primitives:
             self._setup_random_primitives()
+
+    def _sensor_max_contact_force(self, sensor: ContactSensor) -> torch.Tensor:
+        """Return max contact force magnitude across configured tip bodies."""
+        force_matrix_w = getattr(sensor.data, "force_matrix_w", None)
+        if force_matrix_w is not None:
+            mags = torch.norm(force_matrix_w, dim=-1)
+            if mags.ndim >= 3:
+                mags = mags.max(dim=-1)[0]
+        else:
+            mags = torch.norm(sensor.data.net_forces_w, dim=-1)
+        return mags.max(dim=-1)[0]
+
+    def _update_tip_contact_state(self) -> None:
+        """Update tip object/table contact states from split single-body sensors."""
+        object_force = torch.stack(
+            [self._sensor_max_contact_force(sensor) for sensor in self._tip_object_sensors], dim=-1
+        ).max(dim=-1)[0]
+        table_force = torch.stack(
+            [self._sensor_max_contact_force(sensor) for sensor in self._tip_table_sensors], dim=-1
+        ).max(dim=-1)[0]
+        self.tip_object_contact_force.copy_(object_force)
+        self.tip_table_contact_force.copy_(table_force)
+        self.tip_contact_force.copy_(torch.maximum(object_force, table_force))
+        self.tip_object_contact_mask.copy_(object_force > self.cfg.tip_object_contact_threshold)
+        self.tip_table_contact_mask.copy_(table_force > self.cfg.tip_table_contact_threshold)
 
     def _setup_random_primitives(self) -> None:
         """Create one random primitive asset per env (DEXTRAH-style object bank spawn)."""
@@ -407,20 +686,54 @@ class GraspRightEnv(DirectRLEnv):
     # Physics step (Fabrics 실행)
     # ------------------------------------------------------------------
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
-        self.actions = actions.clone()
-
         # ---- 액션 파싱: 6D palm + 5D PCA (DEXTRAH 방식) ----
-        palm_action = actions[:, :6]   # (N, 6), 정규화 [-1, 1]
-        pca_action  = actions[:, 6:]   # (N, 5), 정규화 [-1, 1]
+        if self._reference_replay_enabled:
+            ref_step = torch.clamp(self.episode_length_buf, min=0, max=self._reference_steps - 1).to(torch.long)
+            if self.cfg.grasp_only_mode and self.cfg.tracking_reference_lift_timestep >= 0:
+                ref_step = torch.clamp(ref_step, max=self.cfg.tracking_reference_lift_timestep)
 
-        # Palm pose 스케일 (정규화 → 실제 workspace)
-        palm_pose = scale(palm_action, self.palm_mins, self.palm_maxs)  # (N, 6)
-        self.palm_pose_targets.copy_(palm_pose)
+            ref_delta = self._reference_palm_delta.index_select(0, ref_step)   # (N, 6)
+            palm_pose_raw = self.reference_anchor_palm + ref_delta
+            palm_pose = palm_pose_raw
+            palm_pose = torch.max(torch.min(palm_pose, self.palm_maxs), self.palm_mins)
+            self.palm_pose_targets.copy_(palm_pose)
+            self.reference_desired_palm_pose.copy_(palm_pose_raw)
 
-        # PCA hand 스케일 → Fabrics PCA attractor 직접 제어
-        # cspace attractor는 HAND_GRASP_POSE 고정 (default_config 불변)
-        hand_pca = scale(pca_action, self.hand_pca_mins, self.hand_pca_maxs)  # (N, 5)
-        self.hand_pca_targets.copy_(hand_pca)
+            hand_pca_raw = self._reference_pca_seq.index_select(0, ref_step) + self.reference_pca_bias
+            hand_pca = hand_pca_raw
+            hand_pca = torch.max(torch.min(hand_pca, self.hand_pca_maxs), self.hand_pca_mins)
+            self.hand_pca_targets.copy_(hand_pca)
+            self.reference_desired_hand_pca.copy_(hand_pca_raw)
+
+            palm_sat = (palm_pose_raw < self.palm_mins) | (palm_pose_raw > self.palm_maxs)
+            pca_sat = (hand_pca_raw < self.hand_pca_mins) | (hand_pca_raw > self.hand_pca_maxs)
+            self.reference_palm_saturation_ratio.copy_(palm_sat.float().mean(dim=-1))
+            self.reference_pca_saturation_ratio.copy_(pca_sat.float().mean(dim=-1))
+
+            self.actions = torch.cat(
+                [
+                    self._unscale(self.palm_pose_targets, self.palm_mins, self.palm_maxs),
+                    self._unscale(self.hand_pca_targets, self.hand_pca_mins, self.hand_pca_maxs),
+                ],
+                dim=-1,
+            )
+        else:
+            self.actions = actions.clone()
+            palm_action = actions[:, :6]   # (N, 6), 정규화 [-1, 1]
+            pca_action = actions[:, 6:]    # (N, 5), 정규화 [-1, 1]
+
+            # Palm pose 스케일 (정규화 → 실제 workspace)
+            palm_pose = scale(palm_action, self.palm_mins, self.palm_maxs)  # (N, 6)
+            self.palm_pose_targets.copy_(palm_pose)
+
+            # PCA hand 스케일 → Fabrics PCA attractor 직접 제어
+            # cspace attractor는 HAND_GRASP_POSE 고정 (default_config 불변)
+            hand_pca = scale(pca_action, self.hand_pca_mins, self.hand_pca_maxs)  # (N, 5)
+            self.hand_pca_targets.copy_(hand_pca)
+            self.reference_desired_palm_pose.zero_()
+            self.reference_desired_hand_pca.zero_()
+            self.reference_palm_saturation_ratio.zero_()
+            self.reference_pca_saturation_ratio.zero_()
 
         # ---- Fabrics 실행 (arm + hand 제어) ----
         if not self.cfg.use_cuda_graph:
@@ -493,6 +806,7 @@ class GraspRightEnv(DirectRLEnv):
         self.palm_x_pos      = all_pos[:, 1, :]
         self.fingertip_pos   = all_pos[:, 2:, :]
         self.hand_pos = all_pos
+        self._update_tip_contact_state()
 
         # grasp_target 및 palm_dist_buf 업데이트
         # → 다음 스텝의 _pre_physics_step에서 자동 닫힘 계산에 사용
@@ -508,6 +822,43 @@ class GraspRightEnv(DirectRLEnv):
         )
         palm_x_dir = torch.nn.functional.normalize(self.palm_x_pos - self.palm_center_pos, dim=-1)
         self.pregrasp_orient_align_buf.copy_((palm_x_dir * self.pregrasp_target_x_dir).sum(dim=-1))
+        if self.cfg.use_object_pc_feature:
+            local = self.object_pc_local.unsqueeze(0).expand(self.num_envs, -1, -1)
+            quat_expand = self.object_rot.unsqueeze(1).expand(-1, self.cfg.object_pc_num_points, -1)
+            pc_world = quat_apply(quat_expand.reshape(-1, 4), local.reshape(-1, 3)).reshape(
+                self.num_envs, self.cfg.object_pc_num_points, 3
+            )
+            pc_world = pc_world + self.object_pos.unsqueeze(1)
+            self.object_pc_world.copy_(pc_world)
+            pc_rel = (pc_world - self.palm_center_pos.unsqueeze(1)).reshape(self.num_envs, -1)
+            if self.cfg.object_pc_feature_scale > 0.0:
+                pc_rel = pc_rel / self.cfg.object_pc_feature_scale
+
+            invalid_mask = ~(torch.isfinite(pc_rel))
+            self.object_pc_invalid_ratio.copy_(invalid_mask.float().mean(dim=-1))
+            if self.cfg.object_pc_nan_guard:
+                pc_rel = torch.nan_to_num(pc_rel, nan=0.0, posinf=0.0, neginf=0.0)
+
+            if self.cfg.object_pc_feature_clip > 0.0:
+                clip_v = self.cfg.object_pc_feature_clip
+                clipped_mask = pc_rel.abs() > clip_v
+                self.object_pc_clip_ratio.copy_(clipped_mask.float().mean(dim=-1))
+                pc_rel = torch.clamp(pc_rel, -clip_v, clip_v)
+            else:
+                self.object_pc_clip_ratio.zero_()
+
+            self.object_pc_feature.copy_(pc_rel)
+        else:
+            self.object_pc_world.zero_()
+            self.object_pc_feature.zero_()
+            self.object_pc_clip_ratio.zero_()
+            self.object_pc_invalid_ratio.zero_()
+        if self._reference_replay_enabled:
+            self.reference_palm_tracking_error.copy_(
+                (self.palm_center_pos - self.palm_pose_targets[:, :3]).norm(dim=-1)
+            )
+        else:
+            self.reference_palm_tracking_error.zero_()
 
     # ------------------------------------------------------------------
     # Observations
@@ -530,12 +881,13 @@ class GraspRightEnv(DirectRLEnv):
             self.object_init_pos,                                       # (N, 3)
             (self.pregrasp_pos - self.palm_center_pos),                 # (N, 3)
             self.pregrasp_target_x_dir,                                 # (N, 3)
+            self.object_pc_feature,                                     # (N, 96)
             # 마지막 액션
             self.actions,                                               # (N, 11)
             # Fabrics 상태 (arm 추론용)
             self.fabric_q,                                              # (N, 27)
             self.fabric_qd,                                             # (N, 27)
-        ], dim=-1)  # (N, 150)
+        ], dim=-1)  # (N, 255)
 
         return {"policy": obs, "critic": obs}
 
@@ -634,6 +986,8 @@ class GraspRightEnv(DirectRLEnv):
             + goal_scale * grasp_trigger * obj_to_goal_reward    # approach_trigger 시 활성
             + lift_scale * grasp_trigger * lift_reward           # approach_trigger 시 활성
         )
+        if self.cfg.use_tip_contact_gate:
+            total = total - self.cfg.table_contact_penalty_weight * self.tip_table_contact_mask.float()
 
         # 로깅
         self.extras["pregrasp_reward"] = pregrasp_reward.mean()
@@ -665,16 +1019,30 @@ class GraspRightEnv(DirectRLEnv):
         else:
             self.extras["primitive_ratio"] = torch.zeros((), device=self.device)
             self.extras["cup_ratio"] = torch.ones((), device=self.device) if self.cup is not None else torch.zeros((), device=self.device)
+        self.extras["reference_palm_tracking_error"] = self.reference_palm_tracking_error.mean()
+        self.extras["reference_pca_saturation_ratio"] = self.reference_pca_saturation_ratio.mean()
+        self.extras["reference_palm_saturation_ratio"] = self.reference_palm_saturation_ratio.mean()
+        self.extras["object_pc_feature_norm"] = self.object_pc_feature.norm(dim=-1).mean()
+        self.extras["object_pc_clip_ratio"] = self.object_pc_clip_ratio.mean()
+        self.extras["object_pc_invalid_ratio"] = self.object_pc_invalid_ratio.mean()
+        self.extras["tip_object_contact_rate"] = self.tip_object_contact_mask.float().mean()
+        self.extras["tip_table_contact_rate"] = self.tip_table_contact_mask.float().mean()
+        self.extras["tip_object_contact_force"] = self.tip_object_contact_force.mean()
+        self.extras["tip_contact_force"] = self.tip_contact_force.mean()
+        self.extras["tip_table_contact_force"] = self.tip_table_contact_force.mean()
 
         return total
 
     def _compute_grasp_formed_mask(self, palm_dist: torch.Tensor, grasp_error: torch.Tensor) -> torch.Tensor:
         height_ok = (self.object_pos[:, 2] - self.cfg.object_spawn_z) < self.cfg.grasp_success_max_height_delta
-        return (
+        mask = (
             (palm_dist < self.cfg.grasp_success_palm_dist)
             & (grasp_error < self.cfg.grasp_success_hand_error)
             & height_ok
         )
+        if self.cfg.use_tip_contact_gate:
+            mask = mask & self.tip_object_contact_mask & (~self.tip_table_contact_mask)
+        return mask
 
     # ------------------------------------------------------------------
     # Dones
@@ -774,6 +1142,8 @@ class GraspRightEnv(DirectRLEnv):
                                      torch.full((n,), self.cfg.object_spawn_z, device=self.device)], dim=1)
         obj_pos_world = obj_pos_local + self.scene.env_origins[env_ids]  # (n, 3)
         self.object_init_pos[env_ids] = obj_pos_local
+        upright_rot = torch.zeros(n, 4, device=self.device)
+        upright_rot[:, 0] = 1.0   # w=1 (identity quaternion)
 
         # ---- object-relative pregrasp target 생성 (DemoGrasp-style) ----
         pregrasp_noise = torch.stack(
@@ -795,6 +1165,26 @@ class GraspRightEnv(DirectRLEnv):
         object_quat = upright_rot
         self.pregrasp_quat[env_ids] = self._quat_mul_wxyz(object_quat, rel_quat)
 
+        # ---- trackingReferenceFile 스타일 시계열 참조 리셋 ----
+        if self._reference_replay_enabled:
+            anchor = self._reference_base_palm.unsqueeze(0).repeat(n, 1)
+            anchor[:, :3] = obj_pos_local + self.pregrasp_offset.unsqueeze(0)
+            anchor[:, 0] += (torch.rand(n, device=self.device) - 0.5) * 2.0 * self.cfg.reference_pos_noise_x
+            anchor[:, 1] += (torch.rand(n, device=self.device) - 0.5) * 2.0 * self.cfg.reference_pos_noise_y
+            anchor[:, 2] += (torch.rand(n, device=self.device) - 0.5) * 2.0 * self.cfg.reference_pos_noise_z
+            anchor[:, 3] += (torch.rand(n, device=self.device) - 0.5) * 2.0 * math.radians(self.cfg.reference_orient_noise_ez_deg)
+            anchor[:, 4] += (torch.rand(n, device=self.device) - 0.5) * 2.0 * math.radians(self.cfg.reference_orient_noise_ey_deg)
+            anchor[:, 5] += (torch.rand(n, device=self.device) - 0.5) * 2.0 * math.radians(self.cfg.reference_orient_noise_ex_deg)
+            self.reference_anchor_palm[env_ids] = torch.max(torch.min(anchor, self.palm_maxs), self.palm_mins)
+
+            pca_span = (self.hand_pca_maxs - self.hand_pca_mins).unsqueeze(0)
+            pca_bias = (torch.rand(n, 5, device=self.device) - 0.5) * 2.0
+            pca_bias = pca_bias * self.cfg.reference_pca_noise_scale * pca_span
+            self.reference_pca_bias[env_ids] = pca_bias
+        else:
+            self.reference_anchor_palm[env_ids].zero_()
+            self.reference_pca_bias[env_ids].zero_()
+
         # displacement penalty 기준: 에피소드 시작 시 spawn XY 기록 (local frame)
         self.cup_initial_xy[env_ids] = obj_pos_local[:, :2]
 
@@ -802,8 +1192,6 @@ class GraspRightEnv(DirectRLEnv):
         offscene_pos = self.scene.env_origins[env_ids].clone()
         offscene_pos[:, 2] -= 10.0  # env local z=-10m (테이블 아래)
 
-        upright_rot = torch.zeros(n, 4, device=self.device)
-        upright_rot[:, 0] = 1.0   # w=1 (identity quaternion)
         zero_vel = torch.zeros(n, 6, device=self.device)
 
         # cup: active이면 spawn 위치, inactive이면 scene 밖
@@ -825,3 +1213,12 @@ class GraspRightEnv(DirectRLEnv):
         self.pregrasp_dist_buf[env_ids] = self.cfg.pregrasp_activate_dist
         self.pregrasp_orient_align_buf[env_ids] = 0.0
         self.grasp_hold_steps[env_ids] = 0
+        self.reference_desired_palm_pose[env_ids].zero_()
+        self.reference_desired_hand_pca[env_ids].zero_()
+        self.reference_palm_saturation_ratio[env_ids] = 0.0
+        self.reference_pca_saturation_ratio[env_ids] = 0.0
+        self.reference_palm_tracking_error[env_ids] = 0.0
+        self.object_pc_world[env_ids].zero_()
+        self.object_pc_feature[env_ids].zero_()
+        self.object_pc_clip_ratio[env_ids] = 0.0
+        self.object_pc_invalid_ratio[env_ids] = 0.0

@@ -1,1 +1,0 @@
-sphere.stl filter=lfs diff=lfs merge=lfs -text

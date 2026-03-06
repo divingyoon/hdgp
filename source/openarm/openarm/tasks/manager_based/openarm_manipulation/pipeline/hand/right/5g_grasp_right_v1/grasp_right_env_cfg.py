@@ -17,11 +17,11 @@
 OpenArm(7 DOF) + Teosllo(20 DOF) 오른손 단일 컵 파지 태스크.
 - 제어 방식: Geometric Fabrics (DEXTRAH 방식)
 - 로봇 USD: openarm_modular_dual (Teosllo 공식 물성치 반영)
-- 액션: 7D = 6D palm pose + 1D finger interpolation
-- 리워드: KUKA_ALLEGRO 방식 4항목
+- 액션: 6D palm pose (손가락은 palm_dist 기반 자동 보간)
+- 리워드: KUKA_ALLEGRO 방식 + GraspADR
 """
 
-from dataclasses import MISSING
+from dataclasses import MISSING, field
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, RigidObjectCfg
@@ -61,8 +61,8 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     # -----------------------------------------------------------------------
     # 관측·액션 공간 (DirectRLEnvCfg 필수 필드)
     # -----------------------------------------------------------------------
-    observation_space: int = NUM_OBSERVATIONS  # 150
-    action_space: int = NUM_ACTIONS            # 11 (6D palm + 5D PCA)
+    observation_space: int = NUM_OBSERVATIONS  # 145
+    action_space: int = NUM_ACTIONS            # 6 (6D palm only, 손가락은 자동 보간)
     state_space: int = NUM_OBSERVATIONS        # critic obs = policy obs (단순화)
 
     # 내부 참조용 (DEXTRAH 호환)
@@ -82,38 +82,26 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     # -----------------------------------------------------------------------
     # 리워드 파라미터
     # -----------------------------------------------------------------------
-    # 1. hand_to_object (palm_center only): palm이 컵에 물리적으로 가까워야 보상
-    #    sharpness=8 → palm_dist=0.08m: exp(-0.64)=0.53, 0.04m: exp(-0.32)=0.73
-    #    mean(6 body) 대비: 등쪽 접근으로 게임 불가, palm 방향성 자연히 강제
+    # 1. hand_to_object (palm_center only, side-approach 전용)
+    #    DEXTRAH: max over 6 hand points, sharpness=10.0
+    #    v1: palm_dist만 사용 (side-approach에서 palm이 주 접근 방향)
     hand_to_object_weight: float = 2.0
-    hand_to_object_sharpness: float = 8.0
+    hand_to_object_sharpness: float = 10.0  # DEXTRAH 일치
 
-    # 2. object_to_goal: exp(-α * dist) — 물체를 목표 위치로 (파지 후 단계)
-    object_to_goal_weight: float = 5.0
-    object_to_goal_sharpness: float = 15.0
+    # 2. object_to_goal: exp(-α * dist) — 물체를 목표 위치로
+    #    DEXTRAH: weight=5.0 고정, sharpness는 ADR로 15→20 증가
+    object_to_goal_weight: float = 5.0       # 고정 (ADR 대상 아님, DEXTRAH 동일)
+    object_to_goal_sharpness: float = 15.0   # ADR 초기값 (ADR 활성 시 덮어씀)
 
-    # 3. lift: exp(-α * |z_obj - z_goal|) — 수직 들기 (파지 후 단계)
-    lift_weight: float = 5.0
-    lift_sharpness: float = 5.0
+    # 3. lift: exp(-α * |z_obj - z_goal|) — 수직 들기
+    #    DEXTRAH: weight는 ADR로 5→0 감소, sharpness=8.5 고정
+    lift_weight: float = 5.0      # ADR 초기값 (ADR 활성 시 덮어씀)
+    lift_sharpness: float = 8.5   # DEXTRAH 일치, 고정
 
-    # 4. finger reward (proximity-gated, palm_dist 기준)
-    # 기존 finger_curl_weight 단일 음수 방식 → 로컬 미니멈:
-    #   palm_dist=0.05m에서 proximity=0.37 < 0.5 → 열린 자세가 더 유리
-    # 해결: 두 항 분리
-    #   finger_grasp_reward (+): 가까울 때 grasp → 양수 보상 (h2o 수준)
-    #   finger_open_reg (-):     멀 때 닫으면 패널티 (조기 닫힘 방지)
-    #
-    # curl_proximity_sharpness=20 → palm_dist=0.05m: proximity=0.37, 0.035m: 0.50
-    curl_proximity_sharpness: float = 20.0
-
-    # grasp 보상: proximity * exp(-sharpness * grasp_error)
-    # sharpness=1.0, mean 기준 grasp_error ≈ 0.3 (20 DOF 평균)
-    # weight=2.0: h2o(weight=2.0)와 동급 → 명확한 유인
-    finger_grasp_weight: float = 2.0
-    finger_grasp_sharpness: float = 1.0
-
-    # open 패널티: 멀 때 닫으면 페널티 (값 작게 유지)
-    finger_open_weight: float = -0.02
+    # 4. finger curl (DEXTRAH R_curl 방식)
+    #    항상 활성, 음수 weight → interp_hand 이탈 패널티
+    #    DEXTRAH: w_curl -0.01→-0.005 (완화), v1: 스케일 조정 -2.0→-1.0
+    finger_curl_weight: float = -2.0  # ADR 초기값 (ADR 활성 시 덮어씀)
 
     # 5. palm orientation reward: palm +X(손바닥 법선)이 컵을 향할수록 보상
     # align ∈ [-1, 1] → weight * align ∈ [-weight, +weight]
@@ -122,15 +110,41 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     palm_orient_weight: float = 1.0
 
     # -----------------------------------------------------------------------
-    # 단계 전환 바이너리 게이트 파라미터
+    # ADR (Automatic Domain Randomization)
+    # DEXTRAH DextrahADR 이식 — event_manager 의존성 없음
+    # increment_counter가 올라갈수록 파라미터가 initial → final로 선형 보간
+    # 트리거: object_z > object_spawn_z + lift_adr_threshold (컵이 들릴 때)
     # -----------------------------------------------------------------------
-    # λ (approach_trigger): palm_dist < approach_trigger_dist → 파지 단계 시작
-    #   0.12m: 컵 직경(≈0.08m)보다 약간 크게 → 손이 컵 옆면 근처에 도달했을 때 활성화
-    approach_trigger_dist: float = 0.12
+    # ADR (DEXTRAH 동일 구조)
+    # increment_counter 0→num_increments에 따라 파라미터 선형 보간
+    # 트리거: object_z > object_spawn_z + lift_adr_threshold (컵이 들릴 때)
+    enable_adr: bool = True
+    adr_num_increments: int = 50
+    adr_increment_interval: int = 200
+    adr_trigger_threshold: float = 0.1   # lift 비율 10% 이상이면 increment
+    lift_adr_threshold: float = 0.05     # 5cm 이상 들려야 "lift 성공"으로 집계
+    # ADR 파라미터 (initial → final), DEXTRAH 패턴:
+    #   lift_weight    : 5→0  (초기에 강하게, 점차 감소 → 정밀 배치로 전환)
+    #   goal_sharpness : 15→20 (점점 정밀 요구)
+    #   curl_weight    : -2→-1 (패널티 완화)
+    adr_custom_cfg: dict = field(default_factory=lambda: {
+        "reward_weights": {
+            "lift_weight":        (5.0, 0.0),    # DEXTRAH: 5→0
+            "finger_curl_weight": (-2.0, -1.0),  # DEXTRAH: -0.01→-0.005 스케일 조정
+        },
+        "sharpness": {
+            "object_to_goal_sharpness": (15.0, 20.0),  # DEXTRAH: 15→20
+        },
+    })
 
-    # μ (grasp_trigger): λ AND cup_z > spawn_z + grasp_trigger_height → lift/goal 보상 활성화
-    #   0.02m: 컵이 실제로 들렸을 때만 (테이블 마찰 오차 감안)
-    grasp_trigger_height: float = 0.02
+    # -----------------------------------------------------------------------
+    # 손가락 보간 파라미터 (reward 게이트 아님)
+    # -----------------------------------------------------------------------
+    # approach_trigger_dist: palm_dist 기반 손가락 보간 t 계산용
+    #   t = 1 - clamp(palm_dist / approach_trigger_dist, 0, 1)
+    #   palm_dist < this → 손가락이 grasp_pose 쪽으로 닫힘
+    #   0.20m: side-approach에서 손바닥이 컵에 닿는 시점 ≈ palm_dist 0.15~0.20m
+    approach_trigger_dist: float = 0.20
 
     # h2o 타겟 z offset: cup root frame → 실제 파지 중심
     # cup root가 바닥보다 0.015m 아래, 파지 중심은 root에서 0.056m 위
@@ -148,14 +162,11 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     # -----------------------------------------------------------------------
     object_spawn_x_center: float = 0.55   # palm 시작 x≈0.46 → 컵을 palm 앞에 배치, +x+y 방향 접근
     object_spawn_y_center: float = -0.15  # palm workspace y∈[-0.50,-0.05] 중앙 근처; -Y 방향 접근
-    object_spawn_z: float = 0.38        # visdex 물체 z_min=-0.076 기준 안전 높이
+    object_spawn_z: float = 0.30        # 컵 기준: 테이블 top(0.25m) + 0.05m 여유 (컵 높이 0.091m)
     object_spawn_xy_range: float = 0.08  # ±0.08m 균등 분포
     # 물체 활성 플래그
     enable_cup: bool = True
     enable_primitives: bool = False
-
-    # 성공 기준: 물체가 goal 0.1m 이내
-    success_threshold: float = 0.10
 
     # -----------------------------------------------------------------------
     # 시뮬레이션 설정
@@ -294,7 +305,7 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     cup_cfg: RigidObjectCfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/Cup",
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=[0.55, -0.15, 0.38],   # 초기 USD 위치 (실제 spawn은 _reset_idx에서 결정)
+            pos=[0.55, -0.15, 0.30],   # 초기 USD 위치 (실제 spawn은 _reset_idx에서 결정)
             rot=[1.0, 0.0, 0.0, 0.0],
         ),
         spawn=UsdFileCfg(
@@ -339,19 +350,6 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
             ),
         ),
     )
-
-    # -----------------------------------------------------------------------
-    # Hand body names (Isaac Sim USD 기준)
-    # rj_dg_palm: rj_dg_palm joint를 revolute(range=0)으로 변경 → 별도 body 등록
-    # -----------------------------------------------------------------------
-    hand_body_names: list = [
-        "rl_dg_palm",    # 손바닥 (palm center proxy)
-        "rl_dg_1_4",     # thumb tip
-        "rl_dg_2_4",     # index tip
-        "rl_dg_3_4",     # middle tip
-        "rl_dg_4_4",     # ring tip
-        "rl_dg_5_4",     # pinky tip
-    ]
 
     # -----------------------------------------------------------------------
     # Actuated joint names (오른팔 + 오른손, 27 DOF)
