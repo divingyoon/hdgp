@@ -102,7 +102,28 @@ import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
-import openarm.tasks  # noqa: F401
+
+def _force_local_openarm_path() -> str:
+    """Force import path to hdgp/source/openarm so openarm resolves to local source only."""
+    hdgp_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    openarm_src = os.path.join(hdgp_root, "source", "openarm")
+    openarm_pkg = os.path.join(openarm_src, "openarm")
+    if not os.path.isdir(openarm_pkg):
+        raise RuntimeError(f"Local openarm package not found: {openarm_pkg}")
+    if openarm_src in sys.path:
+        sys.path.remove(openarm_src)
+    sys.path.insert(0, openarm_src)
+    return os.path.abspath(openarm_pkg)
+
+
+_EXPECTED_OPENARM_DIR = _force_local_openarm_path()
+import openarm  # noqa: E402
+if not os.path.abspath(getattr(openarm, "__file__", "")).startswith(_EXPECTED_OPENARM_DIR + os.sep):
+    raise RuntimeError(
+        f"openarm resolved to unexpected location: {getattr(openarm, '__file__', None)} "
+        f"(expected under {_EXPECTED_OPENARM_DIR})"
+    )
+import openarm.tasks  # noqa: F401,E402
 
 # PLACEHOLDER: Extension template (do not remove this comment)
 
