@@ -33,8 +33,20 @@ from __future__ import annotations
 
 import math
 import os as _os
+import sys
+from pathlib import Path
 import torch
 from collections.abc import Sequence
+
+# Prefer vendored FABRICS under hdgp/source/FABRICS/src even when this module is imported directly.
+for _parent in Path(__file__).resolve().parents:
+    if _parent.name == "source":
+        _vendored_fabrics_src = _parent / "FABRICS" / "src"
+        if _vendored_fabrics_src.exists():
+            _vendored_path = str(_vendored_fabrics_src)
+            if _vendored_path not in sys.path:
+                sys.path.insert(0, _vendored_path)
+        break
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, RigidObject, RigidObjectCfg
@@ -190,14 +202,6 @@ class GraspRightEnv(DirectRLEnv):
         self.pregrasp_orient_offset_quat = self._quat_from_euler_zyx_wxyz(ez, ey, ex).squeeze(0)
 
         # ----------------------------------------------------------------
-        # Fabrics cspace attractor를 GRASP_POSE로 고정 (DEXTRAH curled_q에 해당)
-        # PCA attractor는 에이전트가 5D action으로 직접 제어
-        # ----------------------------------------------------------------
-        cspace_default = self.open_tesollo_fabric.default_config.clone()
-        cspace_default[:, NUM_ARM_DOF:] = self.grasp_pose
-        self.open_tesollo_fabric.default_config.copy_(cspace_default)
-
-        # ----------------------------------------------------------------
         # 중간값 버퍼
         # ----------------------------------------------------------------
         self.object_pos = torch.zeros(self.num_envs, 3, device=self.device)
@@ -241,6 +245,14 @@ class GraspRightEnv(DirectRLEnv):
         # Fabrics 초기화 (arm 제어용)
         # ----------------------------------------------------------------
         self._setup_geometric_fabrics()
+
+        # ----------------------------------------------------------------
+        # Fabrics cspace attractor를 GRASP_POSE로 고정 (DEXTRAH curled_q에 해당)
+        # PCA attractor는 에이전트가 5D action으로 직접 제어
+        # ----------------------------------------------------------------
+        cspace_default = self.open_tesollo_fabric.default_config.clone()
+        cspace_default[:, NUM_ARM_DOF:] = self.grasp_pose
+        self.open_tesollo_fabric.default_config.copy_(cspace_default)
 
         # ----------------------------------------------------------------
         # Hand FK taskmap (Fabrics URDF 기준, 8 bodies)

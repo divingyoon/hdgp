@@ -33,8 +33,20 @@ from __future__ import annotations
 
 import math
 import os as _os
+import sys
+from pathlib import Path
 import torch
 from collections.abc import Sequence
+
+# Prefer vendored FABRICS under hdgp/source/FABRICS/src even when this module is imported directly.
+for _parent in Path(__file__).resolve().parents:
+    if _parent.name == "source":
+        _vendored_fabrics_src = _parent / "FABRICS" / "src"
+        if _vendored_fabrics_src.exists():
+            _vendored_path = str(_vendored_fabrics_src)
+            if _vendored_path not in sys.path:
+                sys.path.insert(0, _vendored_path)
+        break
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, RigidObject, RigidObjectCfg

@@ -17,9 +17,18 @@
 ##
 
 import importlib
+import sys
 from pathlib import Path
 
 from isaaclab_tasks.utils import import_packages
+
+# Prefer vendored FABRICS under this repository to avoid external path dependency.
+_SRC_ROOT = Path(__file__).resolve().parents[3]
+_VENDORED_FABRICS_SRC = _SRC_ROOT / "FABRICS" / "src"
+if _VENDORED_FABRICS_SRC.exists():
+    vendored_path = str(_VENDORED_FABRICS_SRC)
+    if vendored_path not in sys.path:
+        sys.path.insert(0, vendored_path)
 
 # Register SkillBlender custom policies with RSL-RL if available.
 try:
@@ -52,15 +61,16 @@ import openarm.tasks.manager_based.openarm_manipulation.pipeline.hand.both.grasp
 import openarm.tasks.manager_based.openarm_manipulation.pipeline.gripper.both.grasp_2g.config
 import openarm.tasks.manager_based.openarm_manipulation.pipeline.gripper.both.grasp_2g.grasp_2g_env_cfg
 
-try:
-    import openarm.tasks.manager_based.openarm_manipulation.primitive_skills.grasp_2g_v1.config
-    import openarm.tasks.manager_based.openarm_manipulation.primitive_skills.grasp_2g_v1.grasp2g_v1_env_cfg
-    import openarm.tasks.manager_based.openarm_manipulation.primitive_skills.ReachIK.config
-    import openarm.tasks.manager_based.openarm_manipulation.primitive_skills.GraspIK.config
-    import openarm.tasks.manager_based.openarm_manipulation.primitive_skills.TransferIK.config
-    import openarm.tasks.manager_based.openarm_manipulation.primitive_skills.PourIK.config
-except ModuleNotFoundError:
-    pass
+# Explicit right-hand pipeline task imports (numeric module segments require importlib).
+for _mod in [
+    "openarm.tasks.manager_based.openarm_manipulation.pipeline.hand.right.5g_grasp_right_v1.config",
+    "openarm.tasks.manager_based.openarm_manipulation.pipeline.hand.right.5g_grasp_right_v2.config",
+    "openarm.tasks.manager_based.openarm_manipulation.pipeline.hand.right.5g_lift_right_v1.config",
+]:
+    try:
+        importlib.import_module(_mod)
+    except (ModuleNotFoundError, ImportError):
+        pass
 
 # pipeline/gripper/left/2g_grasp_left_v1
 # NOTE: module segment starts with a digit, so standard `import ...` syntax is invalid.
