@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""환경 클래스: 5g_grasp_right_v1
+"""환경 클래스: 5g_grasp_right_v2
 
 컨트롤 방식: Geometric Fabrics (DEXTRAH 연계)
   - palm pose 6D → Fabrics → arm 7 DOF joint target
@@ -64,6 +64,7 @@ from .grasp_right_constants import (
     PALM_POSE_MINS_FUNC,
     PALM_POSE_MAXS_FUNC,
 )
+from .grasp_right_preset import FABRIC_HAND_BODY_NAMES, LEFT_ARM_REST_JOINT_POS
 from .grasp_right_utils import scale, to_torch
 
 
@@ -79,6 +80,37 @@ class GraspRightEnv(DirectRLEnv):
     """
 
     cfg: GraspRightEnvCfg
+
+    @staticmethod
+    def _quat_mul_wxyz(q1: torch.Tensor, q2: torch.Tensor) -> torch.Tensor:
+        """Quaternion multiply for wxyz tensors."""
+        w1, x1, y1, z1 = q1.unbind(dim=-1)
+        w2, x2, y2, z2 = q2.unbind(dim=-1)
+        return torch.stack(
+            (
+                w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+                w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+                w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+                w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+            ),
+            dim=-1,
+        )
+
+    @staticmethod
+    def _quat_from_euler_zyx_wxyz(ez: torch.Tensor, ey: torch.Tensor, ex: torch.Tensor) -> torch.Tensor:
+        """Build wxyz quaternion from intrinsic ZYX Euler angles."""
+        hz = 0.5 * ez
+        hy = 0.5 * ey
+        hx = 0.5 * ex
+        cz, sz = torch.cos(hz), torch.sin(hz)
+        cy, sy = torch.cos(hy), torch.sin(hy)
+        cx, sx = torch.cos(hx), torch.sin(hx)
+        qw = cz * cy * cx + sz * sy * sx
+        qx = cz * cy * sx - sz * sy * cx
+        qy = cz * sy * cx + sz * cy * sx
+        qz = sz * cy * cx - cz * sy * sx
+        quat = torch.stack((qw, qx, qy, qz), dim=-1)
+        return torch.nn.functional.normalize(quat, dim=-1)
 
     def __init__(self, cfg: GraspRightEnvCfg, render_mode: str | None = None, **kwargs):
         # palm_dist_buf는 _setup_geometric_fabrics 이전에 필요하므로 먼저 초기화
@@ -134,17 +166,8 @@ class GraspRightEnv(DirectRLEnv):
         # ----------------------------------------------------------------
         # 왼팔 고정 자세
         # ----------------------------------------------------------------
-        left_rest_dict = {
-            "openarm_left_joint1": -0.5,
-            "openarm_left_joint2": -0.5,
-            "openarm_left_joint3":  0.6,
-            "openarm_left_joint4":  0.7,
-            "openarm_left_joint5":  0.0,
-            "openarm_left_joint6":  0.0,
-            "openarm_left_joint7": -1.0,
-        }
         left_vals = [
-            left_rest_dict.get(self.robot.joint_names[idx], 0.0)
+            LEFT_ARM_REST_JOINT_POS.get(self.robot.joint_names[idx], 0.0)
             for idx in self.left_arm_dof_indices
         ]
         self.left_arm_zero_pos = (
@@ -157,12 +180,32 @@ class GraspRightEnv(DirectRLEnv):
         # 목표 위치
         # ----------------------------------------------------------------
         self.object_goal = to_torch(OBJECT_GOAL_POS, device=self.device).unsqueeze(0).repeat(self.num_envs, 1)
+        self.pregrasp_offset = to_torch(
+            [self.cfg.pregrasp_offset_x, self.cfg.pregrasp_offset_y, self.cfg.pregrasp_offset_z],
+            device=self.device,
+        )
+        ez = torch.tensor([math.radians(self.cfg.pregrasp_orient_offset_ez_deg)], device=self.device)
+        ey = torch.tensor([math.radians(self.cfg.pregrasp_orient_offset_ey_deg)], device=self.device)
+        ex = torch.tensor([math.radians(self.cfg.pregrasp_orient_offset_ex_deg)], device=self.device)
+        self.pregrasp_orient_offset_quat = self._quat_from_euler_zyx_wxyz(ez, ey, ex).squeeze(0)
+
+        # ----------------------------------------------------------------
+        # Fabrics cspace attractor를 GRASP_POSE로 고정 (DEXTRAH curled_q에 해당)
+        # PCA attractor는 에이전트가 5D action으로 직접 제어
+        # ----------------------------------------------------------------
+        cspace_default = self.open_tesollo_fabric.default_config.clone()
+        cspace_default[:, NUM_ARM_DOF:] = self.grasp_pose
+        self.open_tesollo_fabric.default_config.copy_(cspace_default)
 
         # ----------------------------------------------------------------
         # 중간값 버퍼
         # ----------------------------------------------------------------
         self.object_pos = torch.zeros(self.num_envs, 3, device=self.device)
+        self.object_init_pos = torch.zeros(self.num_envs, 3, device=self.device)
         self.object_rot = torch.zeros(self.num_envs, 4, device=self.device)
+        self.pregrasp_pos = torch.zeros(self.num_envs, 3, device=self.device)
+        self.pregrasp_quat = torch.zeros(self.num_envs, 4, device=self.device)
+        self.pregrasp_target_x_dir = torch.zeros(self.num_envs, 3, device=self.device)
         self.hand_pos = torch.zeros(self.num_envs, 7, 3, device=self.device)  # 7 bodies × 3D
         self.palm_center_pos = torch.zeros(self.num_envs, 3, device=self.device)
         self.palm_x_pos = torch.zeros(self.num_envs, 3, device=self.device)   # palm +X 방향 마커
@@ -175,6 +218,11 @@ class GraspRightEnv(DirectRLEnv):
         self.palm_dist_buf = torch.full(
             (self.num_envs,), self.cfg.approach_trigger_dist, device=self.device
         )
+        self.pregrasp_dist_buf = torch.full(
+            (self.num_envs,), self.cfg.pregrasp_activate_dist, device=self.device
+        )
+        self.pregrasp_orient_align_buf = torch.zeros(self.num_envs, device=self.device)
+        self.grasp_hold_steps = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
 
         # ----------------------------------------------------------------
         # 물체 유형 추적: 0=cup, 1=primitive (둘 다 활성 시 에피소드마다 랜덤)
@@ -195,30 +243,13 @@ class GraspRightEnv(DirectRLEnv):
         self._setup_geometric_fabrics()
 
         # ----------------------------------------------------------------
-        # Fabrics cspace attractor를 GRASP_POSE로 고정 (DEXTRAH curled_q에 해당)
-        # PCA attractor는 에이전트가 5D action으로 직접 제어
-        # ----------------------------------------------------------------
-        cspace_default = self.open_tesollo_fabric.default_config.clone()
-        cspace_default[:, NUM_ARM_DOF:] = self.grasp_pose
-        self.open_tesollo_fabric.default_config.copy_(cspace_default)
-
-        # ----------------------------------------------------------------
         # Hand FK taskmap (Fabrics URDF 기준, 8 bodies)
         # ----------------------------------------------------------------
         robot_dir_name = "openarm_tesollo"
         robot_name = "openarm_tesollo"
         urdf_path = get_robot_urdf_path(robot_dir_name, robot_name)
-        fabric_hand_body_names = [
-            "palm_center",           # [0]: palm 중심 (h2o 타겟)
-            "palm_x",                # [1]: palm +X 방향 마커 (0.25m 손바닥 법선 방향)
-            "tesollo_right_rl_dg_1_4",  # [2]: thumb tip
-            "tesollo_right_rl_dg_2_4",  # [3]: index tip
-            "tesollo_right_rl_dg_3_4",  # [4]: middle tip
-            "tesollo_right_rl_dg_4_4",  # [5]: ring tip
-            "tesollo_right_rl_dg_5_4",  # [6]: pinky tip
-        ]
         self.hand_points_taskmap = RobotFrameOriginsTaskMap(
-            urdf_path, fabric_hand_body_names, self.num_envs, self.device
+            urdf_path, FABRIC_HAND_BODY_NAMES, self.num_envs, self.device
         )
 
     # ------------------------------------------------------------------
@@ -456,6 +487,15 @@ class GraspRightEnv(DirectRLEnv):
         self.grasp_target = self.object_pos.clone()
         self.grasp_target[:, 2] += self.cfg.object_grasp_z_offset
         self.palm_dist_buf.copy_((self.palm_center_pos - self.grasp_target).norm(dim=-1))
+        self.pregrasp_dist_buf.copy_((self.palm_center_pos - self.pregrasp_pos).norm(dim=-1))
+
+        target_x_local = torch.zeros(self.num_envs, 3, device=self.device)
+        target_x_local[:, 0] = 1.0
+        self.pregrasp_target_x_dir = torch.nn.functional.normalize(
+            quat_apply(self.pregrasp_quat, target_x_local), dim=-1
+        )
+        palm_x_dir = torch.nn.functional.normalize(self.palm_x_pos - self.palm_center_pos, dim=-1)
+        self.pregrasp_orient_align_buf.copy_((palm_x_dir * self.pregrasp_target_x_dir).sum(dim=-1))
 
     # ------------------------------------------------------------------
     # Observations
@@ -475,8 +515,11 @@ class GraspRightEnv(DirectRLEnv):
             self.object_rot,                                            # (N, 4)
             # 목표 위치
             self.object_goal,                                           # (N, 3)
+            self.object_init_pos,                                       # (N, 3)
+            (self.pregrasp_pos - self.palm_center_pos),                 # (N, 3)
+            self.pregrasp_target_x_dir,                                 # (N, 3)
             # 마지막 액션
-            self.actions,                                               # (N, 7)
+            self.actions,                                               # (N, 11)
             # Fabrics 상태 (arm 추론용)
             self.fabric_q,                                              # (N, 27)
             self.fabric_qd,                                             # (N, 27)
@@ -492,6 +535,17 @@ class GraspRightEnv(DirectRLEnv):
         # grasp_target, palm_dist: _compute_intermediate_values에서 이미 계산됨
         grasp_target = self.grasp_target   # (N, 3)
         palm_dist = self.palm_dist_buf     # (N,)
+        pregrasp_dist = self.pregrasp_dist_buf
+
+        pregrasp_reward = self.cfg.pregrasp_reach_weight * torch.exp(
+            -self.cfg.pregrasp_reach_sharpness * pregrasp_dist
+        )
+        pregrasp_orient_align = self.pregrasp_orient_align_buf
+        orient_error = (1.0 - pregrasp_orient_align).clamp(min=0.0)
+        orient_gate = (pregrasp_dist < self.cfg.pregrasp_orient_activate_dist).float()
+        pregrasp_orient_reward = orient_gate * self.cfg.pregrasp_orient_weight * torch.exp(
+            -self.cfg.pregrasp_orient_sharpness * orient_error
+        )
 
         hand_to_obj_reward = self.cfg.hand_to_object_weight * torch.exp(
             -self.cfg.hand_to_object_sharpness * palm_dist
@@ -517,6 +571,7 @@ class GraspRightEnv(DirectRLEnv):
         proximity = torch.exp(-self.cfg.curl_proximity_sharpness * palm_dist)
 
         grasp_error = (hand_q - self.grasp_pose_target.unsqueeze(0)).pow(2).mean(dim=-1)
+        grasp_formed = self._compute_grasp_formed_mask(palm_dist, grasp_error)
 
         finger_grasp_reward = self.cfg.finger_grasp_weight * proximity * torch.exp(
             -self.cfg.finger_grasp_sharpness * grasp_error
@@ -544,19 +599,38 @@ class GraspRightEnv(DirectRLEnv):
         # cup_lifted 조건 제거: 파지 이전에 lift/goal 탐색 기회를 부여
         #   - 자동 닫힘(palm_dist 기반)과 결합: palm 접근 → 손가락 자동 닫힘 → 파지 → 들기
         #   - cup_tipping termination(60도)이 비정상적인 밀기 행동을 억제
-        approach_trigger = (palm_dist < self.cfg.approach_trigger_dist).float()  # (N,)
+        approach_trigger = (
+            (pregrasp_dist < self.cfg.pregrasp_activate_dist)
+            & (pregrasp_orient_align > self.cfg.pregrasp_orient_success_cos)
+        ).float()
         grasp_trigger = approach_trigger  # cup_lifted 조건 제거
+        if self.cfg.grasp_only_mode:
+            goal_scale = self.cfg.grasp_only_goal_reward_scale
+            lift_scale = self.cfg.grasp_only_lift_reward_scale
+        else:
+            goal_scale = 1.0
+            lift_scale = 1.0
 
         # ---- 합산 ----
         total = (
-            hand_to_obj_reward                      # 항상 활성: 접근 유도
+            pregrasp_reward                         # 초기 reference 유도
+            + pregrasp_orient_reward                # orientation reference 유도
+            + hand_to_obj_reward                    # 항상 활성: 접근 유도
             + curl_reg                              # proximity-gated: 파지 자세 유도
+            + self.cfg.grasp_stability_weight * grasp_formed.float()
             + palm_orient_reward                    # 항상 활성: 방향 정렬 유도
-            + grasp_trigger * obj_to_goal_reward    # approach_trigger 시 활성
-            + grasp_trigger * lift_reward           # approach_trigger 시 활성
+            + goal_scale * grasp_trigger * obj_to_goal_reward    # approach_trigger 시 활성
+            + lift_scale * grasp_trigger * lift_reward           # approach_trigger 시 활성
         )
 
         # 로깅
+        self.extras["pregrasp_reward"] = pregrasp_reward.mean()
+        self.extras["pregrasp_dist"] = pregrasp_dist.mean()
+        self.extras["pregrasp_orient_reward"] = pregrasp_orient_reward.mean()
+        self.extras["pregrasp_orient_align"] = pregrasp_orient_align.mean()
+        self.extras["grasp_formed"] = grasp_formed.float().mean()
+        self.extras["grasp_error"] = grasp_error.mean()
+        self.extras["grasp_hold_steps"] = self.grasp_hold_steps.float().mean()
         self.extras["hand_to_object_reward"] = hand_to_obj_reward.mean()
         self.extras["obj_to_goal_reward"] = obj_to_goal_reward.mean()
         self.extras["lift_reward"] = lift_reward.mean()
@@ -582,11 +656,29 @@ class GraspRightEnv(DirectRLEnv):
 
         return total
 
+    def _compute_grasp_formed_mask(self, palm_dist: torch.Tensor, grasp_error: torch.Tensor) -> torch.Tensor:
+        height_ok = (self.object_pos[:, 2] - self.cfg.object_spawn_z) < self.cfg.grasp_success_max_height_delta
+        return (
+            (palm_dist < self.cfg.grasp_success_palm_dist)
+            & (grasp_error < self.cfg.grasp_success_hand_error)
+            & height_ok
+        )
+
     # ------------------------------------------------------------------
     # Dones
     # ------------------------------------------------------------------
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         self._compute_intermediate_values()
+        hand_q = self.robot.data.joint_pos[:, self.hand_dof_indices]
+        grasp_error = (hand_q - self.grasp_pose_target.unsqueeze(0)).pow(2).mean(dim=-1)
+        grasp_formed = self._compute_grasp_formed_mask(self.palm_dist_buf, grasp_error)
+
+        self.grasp_hold_steps = torch.where(
+            grasp_formed,
+            self.grasp_hold_steps + 1,
+            torch.zeros_like(self.grasp_hold_steps),
+        )
+        grasp_success = self.grasp_hold_steps >= self.cfg.grasp_success_hold_steps
 
         # 물체가 작업 영역 밖으로 나갔을 때 종료
         out_x = (self.object_pos[:, 0] < 0.05) | (self.object_pos[:, 0] > 0.85)
@@ -602,7 +694,11 @@ class GraspRightEnv(DirectRLEnv):
         tipped = tilt_cos < self._cup_tipping_cos
 
         terminated = out_x | out_y | fallen | tipped
+        if self.cfg.terminate_on_grasp_success:
+            terminated = terminated | grasp_success
         truncated = self.episode_length_buf >= self.max_episode_length - 1
+
+        self.extras["grasp_success"] = grasp_success.float().mean()
 
         return terminated, truncated
 
@@ -665,6 +761,27 @@ class GraspRightEnv(DirectRLEnv):
         obj_pos_local = torch.stack([obj_x, obj_y,
                                      torch.full((n,), self.cfg.object_spawn_z, device=self.device)], dim=1)
         obj_pos_world = obj_pos_local + self.scene.env_origins[env_ids]  # (n, 3)
+        self.object_init_pos[env_ids] = obj_pos_local
+
+        # ---- object-relative pregrasp target 생성 (DemoGrasp-style) ----
+        pregrasp_noise = torch.stack(
+            [
+                (torch.rand(n, device=self.device) - 0.5) * 2.0 * self.cfg.pregrasp_noise_x,
+                (torch.rand(n, device=self.device) - 0.5) * 2.0 * self.cfg.pregrasp_noise_y,
+                (torch.rand(n, device=self.device) - 0.5) * 2.0 * self.cfg.pregrasp_noise_z,
+            ],
+            dim=1,
+        )
+        pregrasp_pos_local = obj_pos_local + self.pregrasp_offset.unsqueeze(0) + pregrasp_noise
+        self.pregrasp_pos[env_ids] = pregrasp_pos_local
+        ez = (torch.rand(n, device=self.device) - 0.5) * 2.0 * math.radians(self.cfg.pregrasp_orient_noise_ez_deg)
+        ey = (torch.rand(n, device=self.device) - 0.5) * 2.0 * math.radians(self.cfg.pregrasp_orient_noise_ey_deg)
+        ex = (torch.rand(n, device=self.device) - 0.5) * 2.0 * math.radians(self.cfg.pregrasp_orient_noise_ex_deg)
+        noise_quat = self._quat_from_euler_zyx_wxyz(ez, ey, ex)
+        offset_quat = self.pregrasp_orient_offset_quat.unsqueeze(0).repeat(n, 1)
+        rel_quat = self._quat_mul_wxyz(offset_quat, noise_quat)
+        object_quat = upright_rot
+        self.pregrasp_quat[env_ids] = self._quat_mul_wxyz(object_quat, rel_quat)
 
         # displacement penalty 기준: 에피소드 시작 시 spawn XY 기록 (local frame)
         self.cup_initial_xy[env_ids] = obj_pos_local[:, :2]
@@ -693,3 +810,6 @@ class GraspRightEnv(DirectRLEnv):
         self.actions[env_ids].zero_()
         # palm_dist_buf: reward 계산용, 리셋 시 큰 값으로 초기화
         self.palm_dist_buf[env_ids] = self.cfg.approach_trigger_dist
+        self.pregrasp_dist_buf[env_ids] = self.cfg.pregrasp_activate_dist
+        self.pregrasp_orient_align_buf[env_ids] = 0.0
+        self.grasp_hold_steps[env_ids] = 0

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""환경 설정: 5g_grasp_right_v1
+"""환경 설정: 5g_grasp_right_v2
 
 OpenArm(7 DOF) + Teosllo(20 DOF) 오른손 단일 컵 파지 태스크.
 - 제어 방식: Geometric Fabrics (DEXTRAH 방식)
@@ -37,6 +37,12 @@ import os as _os
 
 from openarm.tasks.manager_based.openarm_manipulation import OPENARM_ROOT_DIR
 from .grasp_right_constants import NUM_OBSERVATIONS, NUM_ACTIONS
+from .grasp_right_preset import (
+    HAND_BODY_NAMES_USD,
+    LEFT_ARM_AND_GRIPPER_JOINT_NAMES,
+    LEFT_ARM_REST_JOINT_POS,
+    RIGHT_ACTUATED_JOINT_NAMES,
+)
 
 # hdgp 루트 및 assets 경로 (portable)
 _HDGP_ROOT = _os.path.normpath(_os.path.join(OPENARM_ROOT_DIR, "../../../../../../"))
@@ -45,7 +51,7 @@ _ASSETS_DIR = _os.path.join(_HDGP_ROOT, "assets")
 
 @configclass
 class GraspRightEnvCfg(DirectRLEnvCfg):
-    """5g_grasp_right_v1 환경 설정."""
+    """5g_grasp_right_v2 환경 설정."""
 
     # -----------------------------------------------------------------------
     # 시뮬레이션 파라미터
@@ -61,7 +67,7 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     # -----------------------------------------------------------------------
     # 관측·액션 공간 (DirectRLEnvCfg 필수 필드)
     # -----------------------------------------------------------------------
-    observation_space: int = NUM_OBSERVATIONS  # 150
+    observation_space: int = NUM_OBSERVATIONS  # 159
     action_space: int = NUM_ACTIONS            # 11 (6D palm + 5D PCA)
     state_space: int = NUM_OBSERVATIONS        # critic obs = policy obs (단순화)
 
@@ -135,6 +141,48 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     # h2o 타겟 z offset: cup root frame → 실제 파지 중심
     # cup root가 바닥보다 0.015m 아래, 파지 중심은 root에서 0.056m 위
     object_grasp_z_offset: float = 0.056
+
+    # -----------------------------------------------------------------------
+    # DemoGrasp-style pregrasp reference (object-relative)
+    # -----------------------------------------------------------------------
+    # object local pose 기준 pregrasp 목표 (world +X,+Y,+Z 기준)
+    # 기본값은 컵 뒤(-Y)에서 약간 위(+Z)로 접근하는 초기 레퍼런스
+    pregrasp_offset_x: float = 0.0
+    pregrasp_offset_y: float = -0.10
+    pregrasp_offset_z: float = 0.06
+    # 리셋 시 pregrasp 레퍼런스 랜덤화 범위
+    pregrasp_noise_x: float = 0.02
+    pregrasp_noise_y: float = 0.02
+    pregrasp_noise_z: float = 0.01
+    # pregrasp 근접 판정 및 보상
+    pregrasp_activate_dist: float = 0.05
+    pregrasp_reach_weight: float = 2.5
+    pregrasp_reach_sharpness: float = 10.0
+    # object-relative orientation reference (ZYX deg, world/object frame 기준)
+    pregrasp_orient_offset_ez_deg: float = 90.0
+    pregrasp_orient_offset_ey_deg: float = 0.0
+    pregrasp_orient_offset_ex_deg: float = 90.0
+    pregrasp_orient_noise_ez_deg: float = 8.0
+    pregrasp_orient_noise_ey_deg: float = 8.0
+    pregrasp_orient_noise_ex_deg: float = 8.0
+    pregrasp_orient_activate_dist: float = 0.08
+    pregrasp_orient_success_cos: float = 0.7
+    pregrasp_orient_weight: float = 2.0
+    pregrasp_orient_sharpness: float = 6.0
+
+    # -----------------------------------------------------------------------
+    # Grasp-only stage (stage-3 split)
+    # -----------------------------------------------------------------------
+    grasp_only_mode: bool = True
+    terminate_on_grasp_success: bool = True
+    grasp_success_hold_steps: int = 8
+    grasp_success_palm_dist: float = 0.045
+    grasp_success_hand_error: float = 0.12
+    grasp_success_max_height_delta: float = 0.08
+    grasp_stability_weight: float = 4.0
+    # grasp-only 단계에서는 lift/goal 보상을 0으로 두는 것이 기본
+    grasp_only_goal_reward_scale: float = 0.0
+    grasp_only_lift_reward_scale: float = 0.0
 
     # -----------------------------------------------------------------------
     # 컵 기울기 종료 (displacement_penalty 제거: h2o 모순 유발)
@@ -247,17 +295,8 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
                 "rj_dg_3_1": 0.0, "rj_dg_3_2":  0.0, "rj_dg_3_3": 0.0, "rj_dg_3_4": 0.0,
                 "rj_dg_4_1": 0.0, "rj_dg_4_2":  0.0, "rj_dg_4_3": 0.0, "rj_dg_4_4": 0.0,
                 "rj_dg_5_1": 0.0, "rj_dg_5_2":  0.0, "rj_dg_5_3": 0.0, "rj_dg_5_4": 0.0,
-                # 왼팔: 학습 제외, 고정 자세
-                "openarm_left_joint1": -0.5,
-                "openarm_left_joint2": -0.5,
-                "openarm_left_joint3":  0.6,
-                "openarm_left_joint4":  0.7,
-                "openarm_left_joint5":  0.0,
-                "openarm_left_joint6":  0.0,
-                "openarm_left_joint7": -1.0,
-                # 왼쪽 그리퍼: 0 (openarm_modular_dual.usd 기준 — Teosllo 없음)
-                "openarm_left_finger_joint1": 0.0,
-                "openarm_left_finger_joint2": 0.0,
+                # 왼팔/왼쪽 그리퍼: 학습 제외, 고정 자세
+                **LEFT_ARM_REST_JOINT_POS,
             },
         ),
         actuators={
@@ -344,25 +383,12 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     # Hand body names (Isaac Sim USD 기준)
     # rj_dg_palm: rj_dg_palm joint를 revolute(range=0)으로 변경 → 별도 body 등록
     # -----------------------------------------------------------------------
-    hand_body_names: list = [
-        "rl_dg_palm",    # 손바닥 (palm center proxy)
-        "rl_dg_1_4",     # thumb tip
-        "rl_dg_2_4",     # index tip
-        "rl_dg_3_4",     # middle tip
-        "rl_dg_4_4",     # ring tip
-        "rl_dg_5_4",     # pinky tip
-    ]
+    hand_body_names: list = HAND_BODY_NAMES_USD
 
     # -----------------------------------------------------------------------
     # Actuated joint names (오른팔 + 오른손, 27 DOF)
     # -----------------------------------------------------------------------
-    actuated_joint_names: list = (
-        [f"openarm_right_joint{i}" for i in range(1, 8)] +  # arm 7 DOF
-        [f"rj_dg_{f}_{j}" for f in range(1, 6) for j in range(1, 5)]  # hand 20 DOF
-    )
+    actuated_joint_names: list = RIGHT_ACTUATED_JOINT_NAMES
 
     # 왼팔+왼쪽 그리퍼 joint names (고정, openarm_modular_dual.usd 기준)
-    left_arm_joint_names: list = (
-        [f"openarm_left_joint{i}" for i in range(1, 8)] +
-        ["openarm_left_finger_joint1", "openarm_left_finger_joint2"]
-    )
+    left_arm_joint_names: list = LEFT_ARM_AND_GRIPPER_JOINT_NAMES

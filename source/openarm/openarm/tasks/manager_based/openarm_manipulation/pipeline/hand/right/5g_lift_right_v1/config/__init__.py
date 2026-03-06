@@ -23,6 +23,9 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": f"{__name__}.joint_pos_env_cfg:OpenArmLift5gRightEnvCfg",
         "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_ppo_cfg.yaml",
+        "rl_games_finetune_from_5g_grasp_right_v2_cfg_entry_point": (
+            f"{agents.__name__}:rl_games_ppo_finetune_from_5g_grasp_right_v2_cfg.yaml"
+        ),
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:OpenArmApproachRightPPORunnerCfg",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
     },
@@ -35,6 +38,9 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": f"{__name__}.joint_pos_env_cfg:OpenArmLift5gRightEnvCfg_PLAY",
         "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_ppo_cfg.yaml",
+        "rl_games_finetune_from_5g_grasp_right_v2_cfg_entry_point": (
+            f"{agents.__name__}:rl_games_ppo_finetune_from_5g_grasp_right_v2_cfg.yaml"
+        ),
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:OpenArmApproachRightPPORunnerCfg",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
     },

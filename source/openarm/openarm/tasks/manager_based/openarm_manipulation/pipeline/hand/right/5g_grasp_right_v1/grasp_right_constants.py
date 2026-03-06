@@ -29,13 +29,13 @@ NUM_ROBOT_DOF = NUM_ARM_DOF + NUM_HAND_DOF  # 27
 
 # 6D palm pose action: [x, y, z, ez, ey, ex]
 NUM_PALM_POSE = 6
-# 1D finger action: [-1=열림, +1=닫힘]
-NUM_FINGER_ACTION = 1
+# 5D PCA hand action (DEXTRAH 방식)
+NUM_PCA_ACTION = 5
 # Total action dimensions
-NUM_ACTIONS = NUM_PALM_POSE + NUM_FINGER_ACTION  # 7
+NUM_ACTIONS = NUM_PALM_POSE + NUM_PCA_ACTION  # 11
 
 # ---------------------------------------------------------------------------
-# Hand Poses
+# Hand Poses (DEXTRAH 방식)
 # Joint order (20 DOF):
 #   [0-3]   rj_dg_1_1~4  (thumb)
 #   [4-7]   rj_dg_2_1~4  (index)
@@ -44,42 +44,55 @@ NUM_ACTIONS = NUM_PALM_POSE + NUM_FINGER_ACTION  # 7
 #   [16-19] rj_dg_5_1~4  (pinky)
 # ---------------------------------------------------------------------------
 
-# 완전히 펼쳐진 자세 (action=-1 에 대응)
-# 모든 관절 0: 손가락이 자연스럽게 펼쳐진 상태
-HAND_OPEN_POSE = [
-    0.0,  -1.5,  0.5,  0.5,   # thumb: neutral
-    0.0,  0.0,  0.5,  0.5,   # index: neutral
-    0.0,  0.0,  0.5,  0.5,   # middle: neutral
-    0.0,  0.0,  0.5,  0.5,   # ring: neutral
-    0.0,  0.0,  0.5,  0.5,   # pinky: neutral
+# 리셋 시작 자세: 손가락 열린 상태 (컵 소환 영역 관통 방지)
+# thumb _2=0: opposition 없음 → 엄지가 컵 소환 범위 밖에 위치
+HAND_START_POSE = [
+    0.0,  0.0,  0.0,  0.0,   # thumb: fully open
+    0.0,  0.0,  0.0,  0.0,   # index: fully open
+    0.0,  0.0,  0.0,  0.0,   # middle: fully open
+    0.0,  0.0,  0.0,  0.0,   # ring: fully open
+    0.0,  0.0,  0.0,  0.0,   # pinky: fully open
 ]
 
-# 컵 파지 자세 (action=+1 에 대응)
-# 오른손 기준 (right hand):
-#   thumb:  _1(X, 외전)=0, _2(Z, opposition)=-1.5 [한계 -π~0], _3=0.5, _4=0.5
-#   index:  _1(X, 외전)=0, _2(Y, curl)=0.7 [한계 0~2.007], _3=0.5, _4=0.5
-#   middle: _1(X, 외전)=0, _2(Y, curl)=0.7 [한계 0~1.955], _3=0.5, _4=0.5
-#   ring:   _1(X, 외전)=0, _2(Y, curl)=0.7 [한계 0~1.902], _3=0.5, _4=0.5
-#   pinky:  _1(Z, 굽힘)=0 [사용자 확인], _2(X, 외전)=0, _3=0.7, _4=0.5
+# Fabrics cspace attractor 목표 자세 (DEXTRAH curled_q에 해당)
+# 에이전트가 PCA로 손가락을 조정하는 기준점
+# GUI로 직접 확인한 자연스러운 파지 자세
+#   thumb:  _1=0, _2=-1.5 (opposition), _3=0.5, _4=0.5
+#   index:  _1=0, _2=0.7 (curl),        _3=0.5, _4=0.5
+#   middle: _1=0, _2=0.7,               _3=0.5, _4=0.5
+#   ring:   _1=0, _2=0.7,               _3=0.5, _4=0.5
+#   pinky:  _1=0, _2=0,   _3=0.7,       _4=0.5
 HAND_GRASP_POSE = [
-    0.0, -1.5,  0.5,  0.5,   # thumb: opposition curl
-    0.0,  0.7,  0.5,  0.5,   # index: proximal curl
-    0.0,  0.7,  0.5,  0.5,   # middle: proximal curl
-    0.0,  0.7,  0.5,  0.5,   # ring: proximal curl
-    0.0,  0.0,  0.7,  0.5,   # pinky: mid curl (_3=0.7)
+    0.0, -1.5,  0.5,  0.5,   # thumb
+    0.0,  0.7,  0.5,  0.5,   # index
+    0.0,  0.7,  0.5,  0.5,   # middle
+    0.0,  0.7,  0.5,  0.5,   # ring
+    0.0,  0.0,  0.7,  0.5,   # pinky
 ]
+
+# ---------------------------------------------------------------------------
+# PCA Hand Action 범위 (DEXTRAH openarm_tesollo 기준)
+# 에이전트가 5D PCA action으로 손가락 자세를 직접 제어
+# cspace attractor(HAND_GRASP_POSE) + PCA attractor 조합으로 자연스러운 파지 유도
+# ---------------------------------------------------------------------------
+HAND_PCA_MINS = [0.0, -0.5, -1.0, -1.2, -0.5]
+HAND_PCA_MAXS = [3.5,  2.0,  1.0,  2.0,  2.0]
 
 # ---------------------------------------------------------------------------
 # Arm Start Pose (OpenArm right arm)
-# +Y 접근을 위한 초기 관절 시드 (시뮬 기준으로 튜닝 필요)
-# palm 예상 위치 ≈ (0.42, -0.16, 0.53)
+# FK 탐색 결과 (j7=0, Fabrics default_config와 일치):
+#   palm_center ≈ (0.463, -0.311, 0.431)
+#   palm_normal_y ≈ 0.975 (+Y 방향, 컵 접근 방향)
+#   컵 spawn(y=-0.15) 기준 0.161m 뒤에서 시작 → +Y 방향으로 직진하여 파지
+# 기존 [1.0,-0.5,0,0.5,0,0,1.571]: j7=1.571 때문에 palm이 y=-0.01에 위치
+#   → 컵보다 앞쪽(+y)에 있어 접근 방향이 역방향, 엄지가 앞으로 돌출
 # ---------------------------------------------------------------------------
-ARM_START_POSE = [1.0, -0.5, 0.0, 0.5, 0.0, 0.0, 0]  
+ARM_START_POSE = [0.5, 0.1, 0.4, 0.8, -0.2, 0.0, 0.0]
 
 # ---------------------------------------------------------------------------
 # Palm Pose Workspace (OpenArm right arm, +Y approach grasp)
-# 회전 중심: ez=0°, ey=+90°, ex=0°
-#   - palm_center local +x(= palm_link +Y, out-of-palm)가 물체 +Y를 바라봄
+# 회전 중심: ez=+90°, ey=0°, ex=+90°
+#   - palm_link +X(손바닥 법선) = world +Y
 #   - 접근은 테이블 XY 평면과 평행한 -Y -> +Y 수평 이동
 #   - palm_link +Z(손가락)는 수평 +X 방향
 # ---------------------------------------------------------------------------
@@ -88,9 +101,9 @@ def PALM_POSE_MINS_FUNC(max_pose_angle: float) -> list:
     d = math.pi / 180.0
     return [
         0.25, -0.50, 0.20,                    # x, y, z [m]  (y_min=-0.50: 물체(y=-0.15)로부터 충분히 -Y)
-        (0.0    - max_pose_angle) * d,         # ez: 0° ± angle
-        (90.0   - max_pose_angle) * d,         # ey: +90° ± angle
-        (0.0    - max_pose_angle) * d,         # ex: 0° ± angle
+        (90.0   - max_pose_angle) * d,         # ez: +90° ± angle
+        (0.0    - max_pose_angle) * d,         # ey:   0° ± angle
+        (90.0   - max_pose_angle) * d,         # ex: +90° ± angle
     ]
 
 
@@ -98,9 +111,9 @@ def PALM_POSE_MAXS_FUNC(max_pose_angle: float) -> list:
     d = math.pi / 180.0
     return [
         0.70, -0.05, 0.60,                    # y_max=-0.05: 물체(y=-0.15)보다 약간 안쪽까지 허용
-        (0.0    + max_pose_angle) * d,
         (90.0   + max_pose_angle) * d,
         (0.0    + max_pose_angle) * d,
+        (90.0   + max_pose_angle) * d,
     ]
 
 
@@ -108,7 +121,7 @@ def PALM_POSE_MAXS_FUNC(max_pose_angle: float) -> list:
 # Object & Goal
 # ---------------------------------------------------------------------------
 # 단일 컵 spawn 중심 위치 (오른팔 작업공간 중앙)
-OBJECT_SPAWN_CENTER = [0.55, -0.15, 0.38]   # [x, y, z_base_of_cup] in world local frame
+OBJECT_SPAWN_CENTER = [0.55, -0.15, 0.38]   # [x, y, z] palm 시작(x≈0.46) 앞에 배치
 OBJECT_SPAWN_RANGE_XY = 0.08                # ±0.08m 무작위 오프셋
 
 # 목표 위치: 컵을 들어 올릴 목표점
@@ -117,10 +130,10 @@ OBJECT_GOAL_POS = [0.55, -0.15, 0.65]       # z=0.65: 테이블 위 0.4m 들기
 # ---------------------------------------------------------------------------
 # Observation Size
 # robot_dof_pos: 27, robot_dof_vel: 27
-# hand_pos (6 bodies × 3D): 18
+# hand_pos (7 bodies × 3D): 21  ← palm_center + palm_x + 5 tips
 # object_pos: 3, object_rot: 4, goal_pos: 3
-# last_actions: 7
+# last_actions: 11  ← 6D palm + 5D PCA (DEXTRAH 방식)
 # fabric_q: 27, fabric_qd: 27
-# Total: 143
+# Total: 150
 # ---------------------------------------------------------------------------
-NUM_OBSERVATIONS = 143
+NUM_OBSERVATIONS = 150
