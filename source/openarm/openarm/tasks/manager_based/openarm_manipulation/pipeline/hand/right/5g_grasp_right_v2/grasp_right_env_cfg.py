@@ -87,6 +87,31 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     object_pc_nan_guard: bool = True
 
     # -----------------------------------------------------------------------
+    # Object code -> point-cloud feature map (Phase C)
+    # -----------------------------------------------------------------------
+    # DemoGrasp 포팅용 파일 기반 object feature 관측 토글
+    use_object_pc_feat: bool = True
+    # object code feature 매핑(.pt/.npy) 파일 경로
+    object_pc_feat_path: str = _os.path.join(
+        _ASSETS_DIR,
+        "object_pc_features/openarm_right_object_code_feat_dim64.pt",
+    )
+    # 파일 feature dim(관측 concat 시 고정 차원)
+    object_pc_feat_dim: int = 64
+
+    def __post_init__(self) -> None:
+        """Recompute observation/state dimensions from active feature toggles."""
+        parent_post_init = getattr(super(), "__post_init__", None)
+        if callable(parent_post_init):
+            parent_post_init()
+        extra_obs = self.object_pc_feat_dim if self.use_object_pc_feat else 0
+        total_obs = NUM_OBSERVATIONS + extra_obs
+        self.observation_space = total_obs
+        self.state_space = total_obs
+        self.num_observations = total_obs
+        self.num_states = total_obs
+
+    # -----------------------------------------------------------------------
     # Fabrics 파라미터
     # -----------------------------------------------------------------------
     # Palm pose 워크스페이스 각도 한계 (deg): 회전 중심 ±
@@ -205,6 +230,7 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     grasp_only_mode: bool = True
     terminate_on_grasp_success: bool = True
     grasp_success_hold_steps: int = 8
+    use_lift_success_for_final_success: bool = True
     grasp_success_palm_dist: float = 0.045
     grasp_success_hand_error: float = 0.12
     grasp_success_max_height_delta: float = 0.08
@@ -219,7 +245,18 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     use_tip_contact_gate: bool = True
     tip_object_contact_threshold: float = 0.02
     tip_table_contact_threshold: float = 0.02
+    # Phase C2: force 신호가 유효하지 않을 때 fallback 분류 사용
+    tip_contact_fallback_enabled: bool = True
+    tip_force_valid_eps: float = 1e-6
+    tip_object_fallback_dist: float = 0.055
+    table_top_z: float = 0.25
+    tip_table_fallback_margin: float = 0.010
     table_contact_penalty_weight: float = 0.5
+    object_impact_penalty_weight: float = 0.15
+    object_impact_force_threshold: float = 0.5
+    use_self_collision_penalty: bool = False
+    self_collision_penalty_weight: float = 0.05
+    self_collision_force_threshold: float = 0.5
     right_tip_contact_links: tuple[str, ...] = (
         "rl_dg_1_4",
         "rl_dg_2_4",
@@ -227,6 +264,9 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
         "rl_dg_4_4",
         "rl_dg_5_4",
     )
+    right_palm_contact_link: str = "rl_dg_palm"
+    palm_object_contact_threshold: float = 0.02
+    palm_table_contact_threshold: float = 0.02
     tip_contact_sensor_history_length: int = 1
 
     # -----------------------------------------------------------------------
@@ -291,6 +331,7 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
         ),
         spawn=UsdFileCfg(
             usd_path=_os.path.join(_ASSETS_DIR, "scene_objects/table.usd"),
+            activate_contact_sensors=True,
             rigid_props=RigidBodyPropertiesCfg(
                 kinematic_enabled=True,   # 고정 테이블 (물리 반응 없음)
                 disable_gravity=True,
@@ -394,6 +435,7 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
         ),
         spawn=UsdFileCfg(
             usd_path=_os.path.join(_ASSETS_DIR, "cup_bead/cup.usd"),
+            activate_contact_sensors=True,
             scale=(1.0, 1.0, 1.2),
             articulation_props=sim_utils.ArticulationRootPropertiesCfg(
                 articulation_enabled=False,
@@ -420,6 +462,7 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
         ),
         spawn=UsdFileCfg(
             usd_path=_os.path.join(_ASSETS_DIR, "primitives/USD/small_5_cyl/small_5_cyl.usd"),
+            activate_contact_sensors=True,
             scale=(1.0, 1.0, 1.0),
             articulation_props=sim_utils.ArticulationRootPropertiesCfg(
                 articulation_enabled=False,

@@ -78,13 +78,14 @@ def main() -> int:
                 "tip_contact_force": _to_float(extras.get("tip_contact_force", 0.0)),
             }
 
-        def write_pose(obj, pos_w: torch.Tensor):
+        def write_pose(obj, pos_w: torch.Tensor, write_vel: bool = True):
             pose = torch.zeros((1, 7), device=device)
             pose[:, :3] = pos_w.view(1, 3)
             pose[:, 3] = 1.0  # wxyz identity
             obj.write_root_pose_to_sim(pose, env_ids=torch.tensor([0], device=device, dtype=torch.long))
-            vel = torch.zeros((1, 6), device=device)
-            obj.write_root_velocity_to_sim(vel, env_ids=torch.tensor([0], device=device, dtype=torch.long))
+            if write_vel:
+                vel = torch.zeros((1, 6), device=device)
+                obj.write_root_velocity_to_sim(vel, env_ids=torch.tensor([0], device=device, dtype=torch.long))
 
         env.reset()
         step_n(4)
@@ -92,16 +93,20 @@ def main() -> int:
         results = []
         results.append(read_metrics("baseline"))
 
-        # Use fingertip world position as contact anchor.
-        env_origin = core_env.scene.env_origins[0]
-        tip0_w = core_env.fingertip_pos[0, 0] + env_origin
+        # Use physics body position of first distal link as contact anchor.
+        robot = core_env.scene["robot"]
+        link_name = core_env.cfg.right_tip_contact_links[0]
+        if link_name not in robot.data.body_names:
+            raise RuntimeError(f"Missing contact anchor body: {link_name}")
+        link_idx = robot.data.body_names.index(link_name)
+        tip0_w = robot.data.body_pos_w[0, link_idx]
 
         # Scenario A: force object contact
         if core_env.cup is not None:
             write_pose(core_env.cup, tip0_w)
         # Move table away to reduce accidental table contact
         if core_env.table is not None:
-            write_pose(core_env.table, torch.tensor([0.5725, 0.003, -2.0], device=device))
+            write_pose(core_env.table, torch.tensor([0.5725, 0.003, -2.0], device=device), write_vel=False)
         step_n(args.steps)
         results.append(read_metrics("object_contact_forced"))
 
@@ -110,7 +115,7 @@ def main() -> int:
             write_pose(core_env.cup, torch.tensor([0.2, 0.2, 1.5], device=device))
         if core_env.table is not None:
             # Bring table root near fingertip so table volume intersects hand links.
-            write_pose(core_env.table, tip0_w)
+            write_pose(core_env.table, tip0_w, write_vel=False)
         step_n(args.steps)
         results.append(read_metrics("table_contact_forced"))
 

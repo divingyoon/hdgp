@@ -112,6 +112,13 @@
 
 ## 4. Phase C 상세 계획: object point-cloud feature 관측
 
+진행 상태:
+- [x] 4.1 데이터 준비 완료 (`assets/object_pc_features/openarm_right_object_code_feat_dim64.pt`)
+- [x] 4.2 설정 추가 완료 (`grasp_right_env_cfg.py`)
+- [x] 4.3 런타임 로직 (`grasp_right_env.py`)
+- [ ] 4.4 검증 (cup-only obs shape 확인 완료, primitive 혼합 검증은 기존 primitive reset 이슈로 보류)
+- [ ] 4.5 DoD 확인
+
 ## 4.1 데이터 준비
 - object code -> feature 벡터 매핑 파일 준비 (`.pt` 또는 `.npy`)
 - feature dim 고정(예: 64 또는 128)
@@ -141,6 +148,11 @@
 ---
 
 ## 5. Phase D 상세 계획: 통합 검증
+
+진행 상태:
+- [x] D-smoke(quick) 8-case 실행 완료 (`/tmp/phaseD_reports_quick/summary.json`)
+- [ ] D-smoke(full) 256 env × 2k~5k steps
+- [ ] KPI 기반 튜닝 목록 확정
 
 ## 5.1 Smoke Test
 - 256 env, 2k~5k steps 학습

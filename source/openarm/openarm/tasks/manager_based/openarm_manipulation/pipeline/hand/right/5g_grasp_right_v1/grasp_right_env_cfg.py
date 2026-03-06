@@ -144,7 +144,10 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     #   t = 1 - clamp(palm_dist / approach_trigger_dist, 0, 1)
     #   palm_dist < this → 손가락이 grasp_pose 쪽으로 닫힘
     #   0.20m: side-approach에서 손바닥이 컵에 닿는 시점 ≈ palm_dist 0.15~0.20m
-    approach_trigger_dist: float = 0.20
+    # test7 분석: palm_dist 최소 0.132m (컵 표면까지 0.087m 공백)
+    # trigger=0.20: t=0.34 (34% 닫힘) → 잡을 수 없음
+    # trigger=0.40: t=0.67 (67% 닫힘) → 훨씬 확실한 접촉
+    approach_trigger_dist: float = 0.40
 
     # h2o 타겟 z offset: cup root frame → 실제 파지 중심
     # cup root가 바닥보다 0.015m 아래, 파지 중심은 root에서 0.056m 위
@@ -155,7 +158,9 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
     # -----------------------------------------------------------------------
     # cup_tipping: 컵 기울기가 max_tilt_deg 초과 → 에피소드 종료
     # 극단적 밀기(넘어뜨리기) 방지. 접근 중 살짝 밀리는 것은 불가피하므로 허용
-    cup_tipping_max_deg: float = 60.0
+    # test7: 60°가 너무 엄격 — 접근 중 컵이 살짝 기울어도 바로 종료
+    # 90°로 완화: 손바닥 접근/밀기 중 일부 기울기 허용
+    cup_tipping_max_deg: float = 90.0
 
     # -----------------------------------------------------------------------
     # 물체 spawn
@@ -248,7 +253,7 @@ class GraspRightEnvCfg(DirectRLEnvCfg):
                 "openarm_right_joint1":  0.5,
                 "openarm_right_joint2":  0.1,
                 "openarm_right_joint3":  0.4,
-                "openarm_right_joint4":  0.8,
+                "openarm_right_joint4":  0.6,  # j4=0.6: palm z≈0.301m (table+5cm, FK검증)
                 "openarm_right_joint5": -0.2,
                 "openarm_right_joint6":  0.0,
                 "openarm_right_joint7":  0.0,

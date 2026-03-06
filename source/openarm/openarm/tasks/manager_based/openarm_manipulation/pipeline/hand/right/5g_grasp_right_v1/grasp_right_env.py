@@ -229,6 +229,7 @@ class GraspRightEnv(DirectRLEnv):
         # cspace attractor는 arm 제어에만 실질적으로 영향을 미침
         # ----------------------------------------------------------------
         cspace_default = self.open_tesollo_fabric.default_config.clone()
+        cspace_default[:, :NUM_ARM_DOF] = arm_start.unsqueeze(0).expand(self.num_envs, -1)
         cspace_default[:, NUM_ARM_DOF:] = self.hand_open_pose
         self.open_tesollo_fabric.default_config.copy_(cspace_default)
 

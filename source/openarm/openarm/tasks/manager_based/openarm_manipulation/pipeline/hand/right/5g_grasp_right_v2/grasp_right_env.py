@@ -37,6 +37,7 @@ import pickle
 import sys
 from typing import Any
 from pathlib import Path
+import numpy as np
 import torch
 from collections.abc import Sequence
 
@@ -205,6 +206,102 @@ class GraspRightEnv(DirectRLEnv):
         if hdgp_candidate.exists():
             return hdgp_candidate
         return (Path.cwd() / path).resolve()
+
+    def _resolve_object_pc_feature_path(self, file_path: str) -> Path:
+        """Resolve object feature map path from cfg."""
+        path = Path(file_path).expanduser()
+        if path.is_absolute():
+            return path
+        root_candidate = Path(OPENARM_ROOT_DIR) / path
+        if root_candidate.exists():
+            return root_candidate
+        hdgp_root = (Path(OPENARM_ROOT_DIR) / "../../../../../../").resolve()
+        hdgp_candidate = hdgp_root / path
+        if hdgp_candidate.exists():
+            return hdgp_candidate
+        return (Path.cwd() / path).resolve()
+
+    def _load_object_pc_feature_map(self) -> None:
+        """Load object code -> feature map from .pt/.pth/.npy/.npz."""
+        feat_path = self._resolve_object_pc_feature_path(self.cfg.object_pc_feat_path.strip())
+        if not feat_path.exists():
+            raise FileNotFoundError(f"Object pc feature map file not found: {feat_path}")
+
+        payload: Any
+        if feat_path.suffix in (".pt", ".pth"):
+            payload = torch.load(feat_path, map_location="cpu")
+        elif feat_path.suffix in (".npy", ".npz"):
+            payload = np.load(feat_path, allow_pickle=True)
+            if isinstance(payload, np.lib.npyio.NpzFile):
+                payload = {k: payload[k] for k in payload.files}
+            elif isinstance(payload, np.ndarray) and payload.dtype == object and payload.shape == ():
+                payload = payload.item()
+        else:
+            raise ValueError(f"Unsupported object feature map format: {feat_path.suffix}")
+
+        if not isinstance(payload, dict):
+            raise ValueError("Object feature map payload must be dict-like.")
+
+        if "codes" not in payload or "features" not in payload:
+            raise ValueError("Object feature map must include `codes` and `features`.")
+
+        codes = [str(c) for c in payload["codes"]]
+        features = torch.as_tensor(payload["features"], dtype=torch.float32)
+        if features.ndim != 2 or features.shape[0] != len(codes):
+            raise ValueError("Object feature `features` must be shape (N, D) and match `codes` length.")
+
+        feat_dim = int(features.shape[1])
+        if feat_dim != int(self.cfg.object_pc_feat_dim):
+            raise ValueError(
+                f"object_pc_feat_dim mismatch: cfg={self.cfg.object_pc_feat_dim}, file={feat_dim}, path={feat_path}"
+            )
+
+        code_to_index = payload.get("code_to_index", None)
+        if isinstance(code_to_index, dict):
+            code_to_index = {str(k): int(v) for k, v in code_to_index.items()}
+        else:
+            code_to_index = {code: i for i, code in enumerate(codes)}
+
+        self._object_pc_feat_codes = codes
+        self._object_pc_feat_matrix = features.to(self.device).contiguous()
+        self._object_pc_feat_code_to_index = code_to_index
+        self._object_pc_feat_default_index = (
+            code_to_index.get("primitive:default", code_to_index.get("cup", 0))
+        )
+        self._object_pc_feat_path = str(feat_path)
+        print(
+            "[GraspRightEnv] loaded object pc feature map: "
+            f"path={feat_path}, num_codes={len(codes)}, dim={feat_dim}"
+        )
+
+    def _bind_object_pc_feat_for_envs(
+        self,
+        env_ids: torch.Tensor,
+        is_cup: torch.Tensor,
+        is_primitive: torch.Tensor,
+    ) -> None:
+        """Bind active object code features to per-env observation buffer."""
+        if (not self.cfg.use_object_pc_feat) or self._object_pc_feat_matrix is None:
+            self.object_pc_feat[env_ids].zero_()
+            self.active_object_feat_index[env_ids] = -1
+            return
+
+        n = int(env_ids.shape[0])
+        feat_indices = torch.full((n,), self._object_pc_feat_default_index, dtype=torch.long, device=self.device)
+
+        cup_idx = self._object_pc_feat_code_to_index.get("cup", self._object_pc_feat_default_index)
+        feat_indices = torch.where(is_cup, torch.full_like(feat_indices, cup_idx), feat_indices)
+
+        if is_primitive.any():
+            primitive_env_local_ids = torch.nonzero(is_primitive, as_tuple=False).squeeze(-1).tolist()
+            for local_i in primitive_env_local_ids:
+                global_env_id = int(env_ids[local_i].item())
+                primitive_name = self._primitive_name_per_env[global_env_id]
+                code = f"primitive:{primitive_name}" if primitive_name else "primitive:default"
+                feat_indices[local_i] = self._object_pc_feat_code_to_index.get(code, self._object_pc_feat_default_index)
+
+        self.active_object_feat_index[env_ids] = feat_indices
+        self.object_pc_feat[env_ids] = self._object_pc_feat_matrix.index_select(0, feat_indices)
 
     def _project_hand_qpos_to_teosollo_pca(self, hand_qpos: torch.Tensor) -> torch.Tensor:
         """Project hand joint sequence to 5D Teosollo PCA using least-squares pseudo-inverse."""
@@ -424,13 +521,29 @@ class GraspRightEnv(DirectRLEnv):
         self.object_pc_local = self._build_canonical_object_pc(self.cfg.object_pc_num_points)
         self.object_pc_world = torch.zeros(self.num_envs, self.cfg.object_pc_num_points, 3, device=self.device)
         self.object_pc_feature = torch.zeros(self.num_envs, NUM_OBJECT_PC_FEATURE, device=self.device)
+        self.object_pc_feat = torch.zeros(self.num_envs, self.cfg.object_pc_feat_dim, device=self.device)
+        self._object_pc_feat_codes: list[str] = []
+        self._object_pc_feat_matrix: torch.Tensor | None = None
+        self._object_pc_feat_code_to_index: dict[str, int] = {}
+        self._object_pc_feat_default_index: int = 0
+        self._object_pc_feat_path: str = ""
         self.object_pc_clip_ratio = torch.zeros(self.num_envs, device=self.device)
         self.object_pc_invalid_ratio = torch.zeros(self.num_envs, device=self.device)
         self.tip_contact_force = torch.zeros(self.num_envs, device=self.device)
         self.tip_object_contact_force = torch.zeros(self.num_envs, device=self.device)
         self.tip_table_contact_force = torch.zeros(self.num_envs, device=self.device)
+        self.palm_object_contact_force = torch.zeros(self.num_envs, device=self.device)
+        self.palm_table_contact_force = torch.zeros(self.num_envs, device=self.device)
         self.tip_object_contact_mask = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self.tip_table_contact_mask = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self.palm_object_contact_mask = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self.palm_table_contact_mask = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self.self_collision_force = torch.zeros(self.num_envs, device=self.device)
+        self.self_collision_mask = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self.tip_contact_force_valid = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self.tip_contact_fallback_used = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self.tip_object_fallback_dist_buf = torch.zeros(self.num_envs, device=self.device)
+        self.tip_table_fallback_margin_buf = torch.zeros(self.num_envs, device=self.device)
 
         # ----------------------------------------------------------------
         # 중간값 버퍼
@@ -458,11 +571,14 @@ class GraspRightEnv(DirectRLEnv):
         )
         self.pregrasp_orient_align_buf = torch.zeros(self.num_envs, device=self.device)
         self.grasp_hold_steps = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        self.contact_hold_steps = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
 
         # ----------------------------------------------------------------
         # 물체 유형 추적: 0=cup, 1=primitive (둘 다 활성 시 에피소드마다 랜덤)
         # ----------------------------------------------------------------
         self.active_object_type = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        self.active_object_feat_index = torch.full((self.num_envs,), -1, dtype=torch.long, device=self.device)
+        self._primitive_name_per_env = [""] * self.num_envs
 
         # ----------------------------------------------------------------
         # 컵 초기 XY 위치 (에피소드 시작 시 기록 → displacement penalty 기준)
@@ -479,6 +595,8 @@ class GraspRightEnv(DirectRLEnv):
         self._teosollo_pca_basis = self.open_tesollo_fabric._pca_matrix.detach().clone().to(self.device)
         if self._reference_replay_enabled:
             self._load_tracking_reference()
+        if self.cfg.use_object_pc_feat:
+            self._load_object_pc_feature_map()
 
         # ----------------------------------------------------------------
         # Fabrics cspace attractor를 GRASP_POSE로 고정 (DEXTRAH curled_q에 해당)
@@ -535,6 +653,35 @@ class GraspRightEnv(DirectRLEnv):
             self._tip_table_sensors.append(table_sensor)
             self.scene.sensors[f"tip_object_contact_sensor_{link_name}"] = object_sensor
             self.scene.sensors[f"tip_table_contact_sensor_{link_name}"] = table_sensor
+        palm_link_name = self.cfg.right_palm_contact_link
+        palm_object_sensor_cfg = ContactSensorCfg(
+            prim_path=f"/World/envs/env_.*/Robot/{palm_link_name}",
+            filter_prim_paths_expr=["/World/envs/env_.*/Cup"],
+            history_length=self.cfg.tip_contact_sensor_history_length,
+            track_air_time=False,
+        )
+        palm_table_sensor_cfg = ContactSensorCfg(
+            prim_path=f"/World/envs/env_.*/Robot/{palm_link_name}",
+            filter_prim_paths_expr=["/World/envs/env_.*/Table"],
+            history_length=self.cfg.tip_contact_sensor_history_length,
+            track_air_time=False,
+        )
+        self._palm_object_sensor = ContactSensor(palm_object_sensor_cfg)
+        self._palm_table_sensor = ContactSensor(palm_table_sensor_cfg)
+        self.scene.sensors[f"palm_object_contact_sensor_{palm_link_name}"] = self._palm_object_sensor
+        self.scene.sensors[f"palm_table_contact_sensor_{palm_link_name}"] = self._palm_table_sensor
+        self._self_collision_sensors: list[ContactSensor] = []
+        if self.cfg.use_self_collision_penalty:
+            for link_name in (*self.cfg.right_tip_contact_links, self.cfg.right_palm_contact_link):
+                self_sensor_cfg = ContactSensorCfg(
+                    prim_path=f"/World/envs/env_.*/Robot/{link_name}",
+                    filter_prim_paths_expr=["/World/envs/env_.*/Robot"],
+                    history_length=self.cfg.tip_contact_sensor_history_length,
+                    track_air_time=False,
+                )
+                self_sensor = ContactSensor(self_sensor_cfg)
+                self._self_collision_sensors.append(self_sensor)
+                self.scene.sensors[f"self_collision_sensor_{link_name}"] = self_sensor
 
         spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
 
@@ -560,21 +707,70 @@ class GraspRightEnv(DirectRLEnv):
         return mags.max(dim=-1)[0]
 
     def _update_tip_contact_state(self) -> None:
-        """Update tip object/table contact states from split single-body sensors."""
+        """Update palm+tip object/table contact states from split single-body sensors."""
         object_force = torch.stack(
             [self._sensor_max_contact_force(sensor) for sensor in self._tip_object_sensors], dim=-1
         ).max(dim=-1)[0]
         table_force = torch.stack(
             [self._sensor_max_contact_force(sensor) for sensor in self._tip_table_sensors], dim=-1
         ).max(dim=-1)[0]
+        palm_object_force = self._sensor_max_contact_force(self._palm_object_sensor)
+        palm_table_force = self._sensor_max_contact_force(self._palm_table_sensor)
         self.tip_object_contact_force.copy_(object_force)
         self.tip_table_contact_force.copy_(table_force)
-        self.tip_contact_force.copy_(torch.maximum(object_force, table_force))
-        self.tip_object_contact_mask.copy_(object_force > self.cfg.tip_object_contact_threshold)
-        self.tip_table_contact_mask.copy_(table_force > self.cfg.tip_table_contact_threshold)
+        self.palm_object_contact_force.copy_(palm_object_force)
+        self.palm_table_contact_force.copy_(palm_table_force)
+        object_contact_force = torch.maximum(object_force, palm_object_force)
+        table_contact_force = torch.maximum(table_force, palm_table_force)
+        contact_force = torch.maximum(object_contact_force, table_contact_force)
+        self.tip_contact_force.copy_(contact_force)
+
+        tip_object_force_mask = object_force > self.cfg.tip_object_contact_threshold
+        tip_table_force_mask = table_force > self.cfg.tip_table_contact_threshold
+        self.palm_object_contact_mask.copy_(palm_object_force > self.cfg.palm_object_contact_threshold)
+        self.palm_table_contact_mask.copy_(palm_table_force > self.cfg.palm_table_contact_threshold)
+        object_force_mask = tip_object_force_mask | self.palm_object_contact_mask
+        table_force_mask = tip_table_force_mask | self.palm_table_contact_mask
+        force_valid = contact_force > self.cfg.tip_force_valid_eps
+        self.tip_contact_force_valid.copy_(force_valid)
+
+        # Fallback classifier (Phase C2):
+        # when force signal is unreliable/zero, classify using fingertip-object distance and table height.
+        tip_to_obj = (self.fingertip_pos - self.object_pos.unsqueeze(1)).norm(dim=-1)
+        min_tip_obj_dist = tip_to_obj.min(dim=-1)[0]
+        self.tip_object_fallback_dist_buf.copy_(min_tip_obj_dist)
+        table_gap = torch.minimum(self.fingertip_pos[..., 2].min(dim=-1)[0], self.palm_center_pos[:, 2]) - self.cfg.table_top_z
+        self.tip_table_fallback_margin_buf.copy_(table_gap)
+        object_fallback_mask = min_tip_obj_dist < self.cfg.tip_object_fallback_dist
+        table_fallback_mask = table_gap < self.cfg.tip_table_fallback_margin
+
+        if self.cfg.tip_contact_fallback_enabled:
+            object_mask = torch.where(force_valid, object_force_mask, object_fallback_mask)
+            table_mask = torch.where(force_valid, table_force_mask, table_fallback_mask)
+            # Ensure exclusivity to avoid ambiguous success gate.
+            object_mask = object_mask & (~table_mask)
+            self.tip_contact_fallback_used.copy_(~force_valid)
+        else:
+            object_mask = object_force_mask
+            table_mask = table_force_mask
+            self.tip_contact_fallback_used.zero_()
+
+        self.tip_object_contact_mask.copy_(object_mask)
+        self.tip_table_contact_mask.copy_(table_mask)
+        if self.cfg.use_self_collision_penalty and len(self._self_collision_sensors) > 0:
+            self_force = torch.stack(
+                [self._sensor_max_contact_force(sensor) for sensor in self._self_collision_sensors], dim=-1
+            ).max(dim=-1)[0]
+            self.self_collision_force.copy_(self_force)
+            self.self_collision_mask.copy_(self_force > self.cfg.self_collision_force_threshold)
+        else:
+            self.self_collision_force.zero_()
+            self.self_collision_mask.zero_()
 
     def _setup_random_primitives(self) -> None:
         """Create one random primitive asset per env (DEXTRAH-style object bank spawn)."""
+        if not hasattr(self, "_primitive_name_per_env"):
+            self._primitive_name_per_env = [""] * int(self.cfg.scene.num_envs)
         primitives_root = _os.path.join(OPENARM_ROOT_DIR, "../../../../../../assets/primitives/USD")
         primitives_root = _os.path.normpath(primitives_root)
         sub_dirs = sorted(
@@ -586,6 +782,7 @@ class GraspRightEnv(DirectRLEnv):
         sampled_ids = torch.randint(0, len(sub_dirs), (self.num_envs,), device=self.device).cpu().tolist()
         for i in range(self.num_envs):
             primitive_name = sub_dirs[sampled_ids[i]]
+            self._primitive_name_per_env[i] = primitive_name
             usd_path = _os.path.join(primitives_root, primitive_name, f"{primitive_name}.usd")
             prim_path = f"/World/envs/env_{i}/Primitive/primitive_{i}_{primitive_name}"
             object_cfg = RigidObjectCfg(
@@ -802,7 +999,11 @@ class GraspRightEnv(DirectRLEnv):
         # [0]=palm_center, [1]=palm_x, [2:7]=fingertips
         hand_pos_flat, _ = self.hand_points_taskmap(self.fabric_q, None)  # (N, 21)
         all_pos = hand_pos_flat.view(self.num_envs, 7, 3)  # (N, 7, 3)
-        self.palm_center_pos = all_pos[:, 0, :]
+        if self.cfg.right_palm_contact_link in self.robot.data.body_names:
+            palm_body_id = self.robot.data.body_names.index(self.cfg.right_palm_contact_link)
+            self.palm_center_pos = self.robot.data.body_pos_w[:, palm_body_id] - self.scene.env_origins
+        else:
+            self.palm_center_pos = all_pos[:, 0, :]
         self.palm_x_pos      = all_pos[:, 1, :]
         self.fingertip_pos   = all_pos[:, 2:, :]
         self.hand_pos = all_pos
@@ -882,12 +1083,17 @@ class GraspRightEnv(DirectRLEnv):
             (self.pregrasp_pos - self.palm_center_pos),                 # (N, 3)
             self.pregrasp_target_x_dir,                                 # (N, 3)
             self.object_pc_feature,                                     # (N, 96)
+            self.object_pc_feat,                                        # (N, D)
             # 마지막 액션
             self.actions,                                               # (N, 11)
             # Fabrics 상태 (arm 추론용)
             self.fabric_q,                                              # (N, 27)
             self.fabric_qd,                                             # (N, 27)
-        ], dim=-1)  # (N, 255)
+        ], dim=-1)
+        if obs.shape[1] != self.cfg.observation_space:
+            raise RuntimeError(
+                f"Observation dim mismatch: obs={obs.shape[1]}, cfg={self.cfg.observation_space}"
+            )
 
         return {"policy": obs, "critic": obs}
 
@@ -986,8 +1192,17 @@ class GraspRightEnv(DirectRLEnv):
             + goal_scale * grasp_trigger * obj_to_goal_reward    # approach_trigger 시 활성
             + lift_scale * grasp_trigger * lift_reward           # approach_trigger 시 활성
         )
+        table_contact_penalty = torch.zeros_like(total)
+        object_impact_penalty = torch.zeros_like(total)
+        self_collision_penalty = torch.zeros_like(total)
         if self.cfg.use_tip_contact_gate:
-            total = total - self.cfg.table_contact_penalty_weight * self.tip_table_contact_mask.float()
+            table_contact_penalty = self.cfg.table_contact_penalty_weight * self.tip_table_contact_mask.float()
+            impact_excess = (self.tip_object_contact_force - self.cfg.object_impact_force_threshold).clamp(min=0.0)
+            object_impact_penalty = self.cfg.object_impact_penalty_weight * impact_excess
+            total = total - table_contact_penalty - object_impact_penalty
+            if self.cfg.use_self_collision_penalty:
+                self_collision_penalty = self.cfg.self_collision_penalty_weight * self.self_collision_mask.float()
+                total = total - self_collision_penalty
 
         # 로깅
         self.extras["pregrasp_reward"] = pregrasp_reward.mean()
@@ -1023,6 +1238,7 @@ class GraspRightEnv(DirectRLEnv):
         self.extras["reference_pca_saturation_ratio"] = self.reference_pca_saturation_ratio.mean()
         self.extras["reference_palm_saturation_ratio"] = self.reference_palm_saturation_ratio.mean()
         self.extras["object_pc_feature_norm"] = self.object_pc_feature.norm(dim=-1).mean()
+        self.extras["object_pc_feat_norm"] = self.object_pc_feat.norm(dim=-1).mean()
         self.extras["object_pc_clip_ratio"] = self.object_pc_clip_ratio.mean()
         self.extras["object_pc_invalid_ratio"] = self.object_pc_invalid_ratio.mean()
         self.extras["tip_object_contact_rate"] = self.tip_object_contact_mask.float().mean()
@@ -1030,6 +1246,22 @@ class GraspRightEnv(DirectRLEnv):
         self.extras["tip_object_contact_force"] = self.tip_object_contact_force.mean()
         self.extras["tip_contact_force"] = self.tip_contact_force.mean()
         self.extras["tip_table_contact_force"] = self.tip_table_contact_force.mean()
+        self.extras["palm_object_contact_rate"] = self.palm_object_contact_mask.float().mean()
+        self.extras["palm_table_contact_rate"] = self.palm_table_contact_mask.float().mean()
+        self.extras["palm_object_contact_force"] = self.palm_object_contact_force.mean()
+        self.extras["palm_table_contact_force"] = self.palm_table_contact_force.mean()
+        self.extras["tip_contact_force_valid_rate"] = self.tip_contact_force_valid.float().mean()
+        self.extras["tip_contact_fallback_used_rate"] = self.tip_contact_fallback_used.float().mean()
+        self.extras["tip_object_fallback_dist"] = self.tip_object_fallback_dist_buf.mean()
+        self.extras["tip_table_fallback_margin"] = self.tip_table_fallback_margin_buf.mean()
+        self.extras["grasp_success_contact_rate"] = (
+            (self.contact_hold_steps >= self.cfg.grasp_success_hold_steps).float().mean()
+        )
+        self.extras["table_contact_penalty"] = table_contact_penalty.mean()
+        self.extras["object_impact_penalty"] = object_impact_penalty.mean()
+        self.extras["self_collision_penalty"] = self_collision_penalty.mean()
+        self.extras["self_collision_rate"] = self.self_collision_mask.float().mean()
+        self.extras["self_collision_force"] = self.self_collision_force.mean()
 
         return total
 
@@ -1052,13 +1284,28 @@ class GraspRightEnv(DirectRLEnv):
         hand_q = self.robot.data.joint_pos[:, self.hand_dof_indices]
         grasp_error = (hand_q - self.grasp_pose_target.unsqueeze(0)).pow(2).mean(dim=-1)
         grasp_formed = self._compute_grasp_formed_mask(self.palm_dist_buf, grasp_error)
+        contact_ok = self.tip_object_contact_mask & (~self.tip_table_contact_mask)
 
         self.grasp_hold_steps = torch.where(
             grasp_formed,
             self.grasp_hold_steps + 1,
             torch.zeros_like(self.grasp_hold_steps),
         )
-        grasp_success = self.grasp_hold_steps >= self.cfg.grasp_success_hold_steps
+        self.contact_hold_steps = torch.where(
+            contact_ok,
+            self.contact_hold_steps + 1,
+            torch.zeros_like(self.contact_hold_steps),
+        )
+        contact_sustained = self.contact_hold_steps >= self.cfg.grasp_success_hold_steps
+        grasp_success = (self.grasp_hold_steps >= self.cfg.grasp_success_hold_steps) & contact_sustained
+        lift_success = (
+            (self.object_pos[:, 2] > (self.cfg.object_spawn_z + self.cfg.grasp_trigger_height))
+            & contact_sustained
+        )
+        if (not self.cfg.grasp_only_mode) and self.cfg.use_lift_success_for_final_success:
+            final_success = lift_success
+        else:
+            final_success = grasp_success
 
         # 물체가 작업 영역 밖으로 나갔을 때 종료
         out_x = (self.object_pos[:, 0] < 0.05) | (self.object_pos[:, 0] > 0.85)
@@ -1075,10 +1322,13 @@ class GraspRightEnv(DirectRLEnv):
 
         terminated = out_x | out_y | fallen | tipped
         if self.cfg.terminate_on_grasp_success:
-            terminated = terminated | grasp_success
+            terminated = terminated | final_success
         truncated = self.episode_length_buf >= self.max_episode_length - 1
 
         self.extras["grasp_success"] = grasp_success.float().mean()
+        self.extras["lift_success"] = lift_success.float().mean()
+        self.extras["final_success"] = final_success.float().mean()
+        self.extras["grasp_success_contact_rate"] = contact_sustained.float().mean()
 
         return terminated, truncated
 
@@ -1095,6 +1345,7 @@ class GraspRightEnv(DirectRLEnv):
             return
 
         n = len(env_ids)
+        env_ids_tensor = torch.as_tensor(env_ids, device=self.device, dtype=torch.long)
 
         # ---- 로봇 관절 상태 리셋 ----
         full_pos = torch.zeros(n, self.robot.num_joints, device=self.device)
@@ -1130,6 +1381,9 @@ class GraspRightEnv(DirectRLEnv):
             self.active_object_type[env_ids] = 1
             is_cup = torch.zeros(n, device=self.device, dtype=torch.bool)
             is_primitive = torch.ones(n, device=self.device, dtype=torch.bool)
+
+        # ---- object code feature 바인딩 (Phase C) ----
+        self._bind_object_pc_feat_for_envs(env_ids_tensor, is_cup=is_cup, is_primitive=is_primitive)
 
         # ---- 활성 물체 spawn 위치 (랜덤 ±xy 오프셋) ----
         obj_x = self.cfg.object_spawn_x_center + (
@@ -1213,6 +1467,7 @@ class GraspRightEnv(DirectRLEnv):
         self.pregrasp_dist_buf[env_ids] = self.cfg.pregrasp_activate_dist
         self.pregrasp_orient_align_buf[env_ids] = 0.0
         self.grasp_hold_steps[env_ids] = 0
+        self.contact_hold_steps[env_ids] = 0
         self.reference_desired_palm_pose[env_ids].zero_()
         self.reference_desired_hand_pca[env_ids].zero_()
         self.reference_palm_saturation_ratio[env_ids] = 0.0
@@ -1220,5 +1475,8 @@ class GraspRightEnv(DirectRLEnv):
         self.reference_palm_tracking_error[env_ids] = 0.0
         self.object_pc_world[env_ids].zero_()
         self.object_pc_feature[env_ids].zero_()
+        if not self.cfg.use_object_pc_feat:
+            self.object_pc_feat[env_ids].zero_()
+            self.active_object_feat_index[env_ids] = -1
         self.object_pc_clip_ratio[env_ids] = 0.0
         self.object_pc_invalid_ratio[env_ids] = 0.0
