@@ -24,6 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--num_envs", type=int, default=1)
     parser.add_argument("--steps", type=int, default=8)
     parser.add_argument("--output", type=str, default=None)
+    parser.add_argument("--force_sim_cpu", action="store_true", default=True)
     AppLauncher.add_app_launcher_args(parser)
     return parser
 
@@ -54,6 +55,8 @@ def main() -> int:
     def _run(env_cfg, _agent_cfg):
         if hasattr(env_cfg.scene, "num_envs"):
             env_cfg.scene.num_envs = args.num_envs
+        if args.force_sim_cpu and hasattr(env_cfg, "sim") and hasattr(env_cfg.sim, "device"):
+            env_cfg.sim.device = "cpu"
 
         env = gym.make(args.task, cfg=env_cfg, render_mode=None)
         core_env = env.unwrapped if hasattr(env, "unwrapped") else env
@@ -117,11 +120,21 @@ def main() -> int:
             "num_tip_table_sensors": len(getattr(core_env, "_tip_table_sensors", [])),
             "object_force_matrix_available": [],
             "table_force_matrix_available": [],
+            "object_force_matrix_shapes": [],
+            "table_force_matrix_shapes": [],
+            "object_net_force_shapes": [],
+            "table_net_force_shapes": [],
         }
         for s in getattr(core_env, "_tip_object_sensors", []):
-            sensor_diag["object_force_matrix_available"].append(getattr(s.data, "force_matrix_w", None) is not None)
+            fm = getattr(s.data, "force_matrix_w", None)
+            sensor_diag["object_force_matrix_available"].append(fm is not None)
+            sensor_diag["object_force_matrix_shapes"].append(list(fm.shape) if fm is not None else None)
+            sensor_diag["object_net_force_shapes"].append(list(s.data.net_forces_w.shape))
         for s in getattr(core_env, "_tip_table_sensors", []):
-            sensor_diag["table_force_matrix_available"].append(getattr(s.data, "force_matrix_w", None) is not None)
+            fm = getattr(s.data, "force_matrix_w", None)
+            sensor_diag["table_force_matrix_available"].append(fm is not None)
+            sensor_diag["table_force_matrix_shapes"].append(list(fm.shape) if fm is not None else None)
+            sensor_diag["table_net_force_shapes"].append(list(s.data.net_forces_w.shape))
 
         summary = {
             "task": args.task,
