@@ -34,7 +34,8 @@ class OpenArmTeoslloPoseFabric(BaseFabric):
       [23-26] rj_dg_5_1~4              (pinky)
     """
 
-    def __init__(self, batch_size, device, timestep, graph_capturable=True):
+    def __init__(self, batch_size, device, timestep, graph_capturable=True, use_hand_fabric=True):
+        self._use_hand_fabric = use_hand_fabric
         fabric_params_filename = "openarm_tesollo_pose_params.yaml"
         super().__init__(device, batch_size, timestep, fabric_params_filename,
                          graph_capturable=graph_capturable)
@@ -308,7 +309,8 @@ class OpenArmTeoslloPoseFabric(BaseFabric):
     def construct_fabric(self):
         self.add_joint_limit_repulsion()
         self.add_cspace_attractor(False)
-        self.add_hand_fabric()
+        if self._use_hand_fabric:
+            self.add_hand_fabric()
         self.add_palm_points_attractor()
         self.add_body_repulsion()
         self.add_cspace_energy()
@@ -406,7 +408,8 @@ class OpenArmTeoslloPoseFabric(BaseFabric):
             object_indicator:         Warp array indicating mesh presence
             cspace_damping_gain:      Optional damping gain scalar
         """
-        self.fabrics_features["pca_hand"]["hand_attractor"] = hand_target
+        if "pca_hand" in self.fabrics_features:
+            self.fabrics_features["pca_hand"]["hand_attractor"] = hand_target
         self.fabrics_features["identity"]["cspace_attractor"] = self.default_config
 
         self._palm_pose_target[:, :3] = palm_pose_target[:, :3]

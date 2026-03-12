@@ -35,14 +35,14 @@ fabric_params:
         mass_sharpness: 10.
         mass_switch_offset: 0.5
         conical_sharpness: 40.
-        conical_gain: 50.
+        conical_gain: 80.
         damping: 50.
         damping_sharpness: 10.
         damping_radius: .2
     body_repulsion:
       max_depth: 2.
       min_depth: 0.01
-      engage_depth: 0.5
+      engage_depth: 0.15
       breakaway_depth: 0.0
       breakaway_velocity: 0.
       metric_scalar: 1.
@@ -53,7 +53,7 @@ fabric_params:
       forcing_metric_scalar: .01
       geom_metric_scalar: .01
       constant_accel: 1.
-      constant_accel_geom: 5.
+      constant_accel_geom: 1.5
       damping_gain: 0.
       collision_sphere_frames:
           ["openarm_right_link2", "openarm_right_link2_sphere2", "openarm_right_link2_sphere3",

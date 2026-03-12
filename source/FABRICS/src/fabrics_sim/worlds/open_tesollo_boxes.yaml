@@ -32,11 +32,6 @@ top_wall:
   scaling: 1.7 1.1 .03
   transform: 0.45 0.08 1.30 0. 0. 0. 1.
 
-floor:
-  env_index: all
-  type: box
-  scaling: 1.7 1.1 .03
-  transform: 0.45 0.075 .2 0. 0. 0. 1.
 
 # Left arm static obstacle spheres: REMOVED
 # 물체가 오른쪽 워크스페이스(y=-0.15)에 소환되므로 오른팔이 왼팔 방향(y>0)으로 갈 이유 없음.
