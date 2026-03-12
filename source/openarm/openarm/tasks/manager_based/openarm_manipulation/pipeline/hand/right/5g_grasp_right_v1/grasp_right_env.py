@@ -339,7 +339,9 @@ class GraspRightEnv(DirectRLEnv):
         initialize_warp(warp_cache_dir)
 
         print("=== GraspRightEnv: Creating Fabrics world ===")
-        world_filename = "open_tesollo_boxes"
+        # Remove only FABRICS-level table repulsion for v1.
+        # The sim table collision remains active through PhysX.
+        world_filename = "open_tesollo_boxes_no_table"
         max_objects_per_env = self.cfg.fabrics_max_objects_per_env
         self.world_model = WorldMeshesModel(
             batch_size=self.num_envs,

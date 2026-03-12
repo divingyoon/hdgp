@@ -1,0 +1,31 @@
+# World mesh for OpenArm + Teosllo right arm
+# Same as open_tesollo_boxes.yaml, but without the table obstacle.
+# Keep PhysX table collisions active in the sim while removing FABRICS table repulsion.
+
+left_wall:
+  env_index: all
+  type: box
+  scaling: 1.7 .03 1.1
+  transform: 0.45 -.45 .75 0. 0. 0. 1.
+
+right_wall:
+  env_index: all
+  type: box
+  scaling: 1.7 .03 1.1
+  transform: 0.45 .60 .75 0. 0. 0. 1.
+
+back_wall:
+  env_index: all
+  type: box
+  scaling: .03 1.1 1.1
+  transform: -0.4 0.075 .75 0. 0. 0. 1.
+
+top_wall:
+  env_index: all
+  type: box
+  scaling: 1.7 1.1 .03
+  transform: 0.45 0.08 1.30 0. 0. 0. 1.
+
+
+# Left arm static obstacle spheres: REMOVED
+# The object spawns in the right-hand workspace, so extra left-arm avoidance is unnecessary here.
