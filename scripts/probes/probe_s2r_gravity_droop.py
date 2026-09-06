@@ -94,7 +94,17 @@ _GAIN_TAG = "r2s 정합" if _REAL else "KUKA 기본"
 
 def _run(gravity_on: bool) -> dict:
     """한 조합을 돌려 관절별 처짐[rad]을 돌려준다."""
-    cfg = GraspS2RTesolloRightEnvCfg()
+    # ★★2026-09-06 수정: 구 코드는 `cfg.finalize_after_overrides()` **뒤에**
+    #   `disable_gravity` 를 손으로 얹었는데, `GraspS2REnv.__init__`(grasp_s2r_env.py:38)
+    #   이 finalize 를 **한 번 더** 부르면서 robot_cfg 를 재조립해 그 값을 지웠다.
+    #   그래서 `--gravity` 플래그가 **조용히 무효**였다(on/off 가 같은 씬을 돌았다).
+    #   finalize 를 감싸 매번 다시 얹는다 — 이제 어느 경로로 호출돼도 살아남는다.
+    class _Cfg(GraspS2RTesolloRightEnvCfg):
+        def finalize_after_overrides(self):
+            super().finalize_after_overrides()
+            self.robot_cfg.spawn.rigid_props.disable_gravity = not gravity_on
+
+    cfg = _Cfg()
     cfg.scene.num_envs = int(args.envs)
     cfg.object_bank = "single_cup"
     cfg.enable_events = False
@@ -104,7 +114,8 @@ def _run(gravity_on: bool) -> dict:
     # ★중력은 USD spawn 속성이라 여기서만 바꿀 수 있다. finalize 가 robot_cfg 를
     #   다시 만드므로 그 **뒤에** 덮어야 한다.
     cfg.finalize_after_overrides()
-    cfg.robot_cfg.spawn.rigid_props.disable_gravity = not gravity_on
+    assert cfg.robot_cfg.spawn.rigid_props.disable_gravity == (not gravity_on), \
+        "disable_gravity 오버라이드가 finalize 에 지워졌다"
 
     env = GraspS2REnv(cfg, render_mode=None)
     u = env.unwrapped

@@ -16,6 +16,7 @@ from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent.parent
 _ENV = (_HERE / "grasp_s2r_env.py").read_text(encoding="utf-8")
+_CTL = (_HERE / "grasp_s2r_control.py").read_text(encoding="utf-8")
 _CTRL = (_HERE / "grasp_s2r_control.py").read_text(encoding="utf-8")
 _CFG = (_HERE / "grasp_s2r_env_cfg.py").read_text(encoding="utf-8")
 _REW = (_HERE / "grasp_s2r_rewards.py").read_text(encoding="utf-8")
@@ -1493,71 +1494,121 @@ def test_lerp_range_is_pure_and_numerically_correct():
     assert lerp((1.0, 1.0), 1.0) == (1.0, 1.0), "종점이 항등이면 전 구간 항등"
 
 
-def test_real_gain_branch_is_recorded_and_verified():
-    """★★09.01 재생 무결성 — r2s 정합 게인 사용 여부가 dump 에 남고 부팅에서 대조된다.
+def test_arm_gains_are_vendor_values_and_checked_at_boot():
+    """★★2026-09-06 확정 — 팔 PD 게인은 **벤더 `control_gains.yaml` 하나뿐**이다.
 
-    게인 선택은 `robot_profiles.py` 가 **import 시점**에 `HDGP_S2R_REAL_GAINS` 로
-    하는데 환경변수는 `params/env.yaml` 에 **안 남는다**. 그래서 그 게인으로 학습한
-    체크포인트를 환경변수 없이 재생하면 4배 단단한 KUKA 게인으로 조용히 돌아간다 —
-    m1_final 이 죽은 것과 같은 계열(차원은 맞는데 의미가 다른)이다.
+    구 계약(`use_real_gains` + `HDGP_S2R_REAL_GAINS`)은 "KUKA 냐 r2s 냐"를 고르는
+    스위치였는데, 선택지가 벤더값 하나로 줄어든 뒤에는 판별식이 **항상 참**이 되어
+    기본 False 인 환경변수와 어긋났다. 그래서 태스크가 부팅에서 무조건 죽었다.
+    이제 스위치는 없고, 대신 조립된 게인이 정말 벤더값인지 대조한다.
 
-    계약: ①`use_real_gains` 가 cfg 필드라 dump 에 실린다 ②기본값은 환경변수를 따라
-    기존 워크플로가 깨지지 않는다 ③`finalize_after_overrides` 가 실제 조립 결과와
-    대조해 어긋나면 **부팅에서 죽인다**(조용히 틀리지 않는다).
+    다른 게인으로 학습한 정책은 **다른 로봇에서 배운 것**이라 배포할 수 없다
+    (09.03 우팔 d3 = KUKA kp 300 학습 → 배포 불가).
     """
+    from openarm.agnostic.modules import vendor_gains as VG
+
     cfg = _code(_CFG)
-    assert 'use_real_gains: bool = _os.environ.get("HDGP_S2R_REAL_GAINS") == "1"' in cfg, \
-        "cfg 필드가 아니거나 환경변수 기본값을 안 따른다"
-    blk = _fn_block(cfg, "_assert_gain_branch")
-    assert '"right_arm_proximal" in _specs' in blk, "KUKA 분기 판별이 없다"
-    assert '"right_arm_j1" in _specs' in blk, "실측 분기 판별이 없다"
-    assert "if not (_kuka or _real):" in blk, \
-        "게인 분기가 없는 프로필(gripper_left)에서 오탐한다"
+    assert "use_real_gains" not in cfg.replace("구 `use_real_gains`", ""), \
+        "죽은 게인 스위치가 되살아났다"
+    assert "HDGP_S2R_REAL_GAINS" not in cfg.replace("`HDGP_S2R_REAL_GAINS`", ""), \
+        "죽은 환경변수 분기가 되살아났다"
+    blk = _fn_block(cfg, "_assert_vendor_gains")
+    assert "_vg.load()" in blk, "벤더 yaml 을 안 읽는다"
     assert "raise RuntimeError" in blk, "불일치를 조용히 넘긴다"
-    assert "self._assert_gain_branch(profile)" in cfg, \
+    assert "self._assert_vendor_gains(profile)" in cfg, \
         "finalize_after_overrides 가 대조를 안 부른다"
 
+    # 프로필이 실제로 벤더값으로 조립되는가(해석 결과 대조)
+    from openarm.agnostic.tasks.grasp_s2r import robot_profiles as RP
+    table = VG.load()
+    for prof in RP.PROFILES.values():
+        for spec in prof.actuator_specs.values():
+            exprs = spec.get("joint_names_expr", ())
+            if len(exprs) != 1:
+                continue
+            for side in VG.SIDES:
+                for idx in VG.ARM_JOINTS:
+                    if exprs[0] == VG.joint_name(side, idx):
+                        assert (spec["stiffness"], spec["damping"]) == table[idx], \
+                            f"{prof.name}/{exprs[0]} 게인이 벤더값이 아니다"
 
-def test_robot_gravity_stays_disabled():
-    """★★09.01 확정 — 로봇 중력은 **켜지 않는다**(실기가 중력보상을 켠 채로 돈다).
 
-    켜면 중력을 두 번 세는 것이다. 실측(08.31 우팔): 무보상 처짐 **12.76°** →
-    보상 후 **2.05°**. sim 중력 ON 은 12.76° 쪽을 모델링해 실기와 10° 벌어진다.
-    r2s 정합 게인에서 더 치명적이다 — 손목 kp 50→10 이라 테솔로 손 1.763 kg 의
-    토크(≈2.1 N·m)에 0.21 rad = 12° 처진다. 그 게인 자체가 **중력보상 전제**로
-    동정됐다(r2s collect 가 `gravity_comp_node.py` 를 필수로 요구한다).
+def test_gravity_compensation_matches_the_real_controller():
+    """★★2026-09-06 — sim 도 실기 pd 노드와 **같은 자리에 τ_ff** 를 넣는다.
 
-    ★물체(컵)는 별개다 — `object_cfg` 는 `disable_gravity=False` 로 무게가 살아 있어야
-    파지·리프트가 물리적으로 성립한다.
+    실기는 `gravity.mode: model_tau_ff` 로 팔에 중력 피드포워드를 얹는다. 학습이 그걸
+    안 하면 다른 로봇에서 배운 것이 된다.
+
+    실측 근거(홈 자세를 PD 로만 유지, 600 스텝):
+        보상 0.0 → 손 최저 z 0.3685 → **0.1505** (상판 0.205 아래 54.5mm), 처짐 최대 13.81°
+        보상 1.0 → 손 최저 z **0.3620 유지**, 처짐 최대 **0.34°**
+    보상이 없으면 정책이 무엇을 하기 전에 손이 테이블에 박힌 채로 에피소드가 시작된다.
+
+    계약 셋: ①팔 관절에만 건다(실기 DG-5F 드라이버에 중력보상이 없다) ②중력이 꺼졌는데
+    보상이 켜져 있으면 부팅에서 죽인다(중력을 두 번 지운다) ③`enable_gravity` 가
+    spawn 속성으로 실제 파생된다.
+    """
+    cfg, env, ctl = _code(_CFG), _code(_ENV), _code(_CTL)
+    assert "enable_gravity: bool = True" in cfg, "중력 스위치가 cfg 필드가 아니다"
+    assert "gravity_compensation: float = 1.0" in cfg, "중력보상 배율이 cfg 필드가 아니다"
+    assert "disable_gravity=not enable_gravity" in cfg, "spawn 속성이 cfg 에서 파생되지 않는다"
+
+    blk = _fn_block(ctl, "_apply_gravity_compensation")
+    assert "get_gravity_compensation_forces()" in blk, "중력 토크를 안 읽는다"
+    assert "set_joint_effort_target" in blk, "τ_ff 를 안 보낸다"
+    assert "joint_ids=self._grav_ids" in blk, "전 관절에 걸면 손·머리까지 보상해 실기와 갈린다"
+    assert "self._apply_gravity_compensation()" in _fn_block(ctl, "_apply_action"), \
+        "_apply_action 이 보상을 안 부른다"
+
+    assert '"[rl]_aj_[1-7]"' in env, "중력보상 대상이 양팔 7관절이 아니다"
+    assert "중력을 두 번 지운다" in env, "중력 OFF + 보상 ON 조합을 막는 가드가 없다"
+
+
+def test_robot_gravity_is_enabled():
+    """★★2026-09-06 사용자 확정 — 로봇 자체 중력을 **켠다**. 보상은 어디에도 없다.
+
+    실기도 `gravity.mode: off` 로 가므로 양쪽 PD 가 같은 중력을 그대로 맞는다.
+    근거는 09.02 유령질량 수정 후의 처짐 실측이다(벤더 게인, 단위 deg):
+        관절        j1     j2     j3     j4     j7
+        sim        2.11   2.78   0.67  -2.53   4.77
+        실기       1.92   2.66   0.59  -2.33   4.24
+    전 관절 0.5° 이내 = 같은 물리다. 구 09.01 규약("켜지 않는다")은 ①실기가 보상을
+    켠 채 돈다 ②게인이 보상 전제로 동정됐다 ③중력 기여분이 2.9~4.5° 다 라는 세 전제가
+    모두 무너져 폐기했다(③은 유령질량 자산에서 잰 과대값이었다).
+
+    ★물체(컵)도 `disable_gravity=False` 라야 파지·리프트가 물리적으로 성립한다.
     """
     cfg = _code(_CFG)
     _rb = cfg[cfg.index("def _build_robot_cfg"):]
     _rb = _rb[:_rb.index("max_depenetration_velocity")]
-    assert "disable_gravity=True" in _rb, \
-        "로봇 중력이 켜졌다 — 실기 중력보상과 이중 계산된다"
-    assert "disable_gravity=False" in cfg, "물체 중력이 꺼졌다 — 파지가 무의미해진다"
+    assert "disable_gravity=not enable_gravity" in _rb, \
+        "로봇 중력이 cfg 에서 파생되지 않는다 — 하드코딩하면 오버라이드가 조용히 죽는다"
+    assert "enable_gravity: bool = True" in cfg, "로봇 중력 기본값이 ON 이 아니다"
+    # 물체는 별개 — 무게가 살아 있어야 파지·리프트가 성립한다.
+    _ob = cfg[cfg.index("object_cfg: RigidObjectCfg"):]
+    assert "disable_gravity=False" in _ob[:_ob.index("object_spawn_base")
+                                          if "object_spawn_base" in _ob else 4000], \
+        "물체 중력이 꺼졌다 — 파지가 무의미해진다"
 
 
-def test_hand_sim_gains_stay_at_grip_force_value():
-    """★★09.01 손 튜닝 확정 — sim 손 게인은 `kp 5.0 · kd 2.0` 을 **그대로 둔다**.
+def test_hand_sim_gains_are_the_vendor_driver_pid():
+    """★★2026-09-06 사용자 확정 — 손도 **벤더 드라이버 PID(p 1.5 · d 0)** 만 쓴다.
 
-    정합은 **실기 쪽을 올려서** 했다: ros2_control JTC PID 의 p 를 벤더 1.5 →
-    **4.5** 로 써 넣었다(`SetJointGain*` 서비스로 쓸 수 있는 것이 팔에 없던 자유도).
-    같은 주먹 램프에서 실기 정상오차 0.39°(최대 1.50°) vs sim 0.05°(최대 0.60°) —
-    차이 0.34° 는 손가락 끝에서 1 mm 이하라 파지에 영향이 없다.
+    이 테스트는 정반대의 계약을 잠그던 자리다. 구 09.01 규약은 sim 을 `kp 5.0 · kd 2.0`
+    에 두고 **실기를 4.5 로 올려** 맞췄다(bringup 마다 `apply_hand_gains.py` 재적용).
+    09.06 결정으로 그 방향이 뒤집혔다 — 양쪽 다 벤더값으로 내린다.
 
-    ★sim kp 를 실기에 맞춰 **낮추면 안 된다** — 5.0 은 파지력 기준으로 정해진 값이고
-      (grasp_v1 kd 스윕: kd 6.71 포화 20.5% · kd ≤0.5 채터 · kd 2.0 이 양쪽 최적),
-      낮추면 파지력이 그만큼 준다. 반대로 실기 p 를 더 올리는 길은 **p=6 진동**이
-      막는다(σ 0.095° → 0.160°). 지금이 양쪽 한계 안에서의 최선이다.
-
-    ⚠실기 p=4.5 는 **bringup 마다 벤더 기본으로 돌아간다** — vendor yaml 은 안 고쳤다.
-      `sim2real/scripts/apply_hand_gains.py --execute` 를 매번 돌려야 한다.
+    ⚠따라오는 실측 결과: 벤더 p=1.5 는 4 s 주먹 램프에서 지령의 **82 %** 까지만 간다
+      (4.5 는 98~101 %). sim 도 같은 1.5 라 sim↔실기 정합은 오히려 좋아지지만,
+      **파지력·도달률은 재확인 대상**이다. effort 한계 1.5 N·m 는 게인이 아니라 그대로다.
     """
+    from openarm.agnostic.modules import vendor_gains as VG
+
     prof = (_HERE / "robot_profiles.py").read_text(encoding="utf-8")
-    assert 'stiffness=5.0, damping=2.0' in prof, \
-        "손 sim 게인이 바뀌었다 — 파지력 기준값(kp 5.0)을 실기에 맞춰 낮추지 말 것"
+    assert "_vg.hand_actuator(" in prof, "손 게인이 벤더 모듈을 거치지 않는다"
+    assert "stiffness=5.0, damping=2.0" not in prof, "구 손 게인(5.0/2.0)이 되살아났다"
     assert "effort_limit_sim=1.5" in prof, "손 effort 한계가 바뀌었다"
+    assert VG.hand_gains() == (1.5, 0.0)
 
 
 def test_gain_dr_excludes_hand_by_default():
@@ -1575,3 +1626,35 @@ def test_gain_dr_excludes_hand_by_default():
     assert 'if str(self.gain_dr_joints) == "arm":' in cfg
     assert '"asset_cfg"].joint_names = [profile.arm_joint_regex]' in cfg, \
         "팔 regex 를 프로필에서 안 읽는다(리터럴 금지)"
+
+
+def test_table_top_matches_the_env_v1_asset_geometry():
+    """★★테이블 상면 0.205 를 **자산 메시와 수치로** 대조한다(09.06 신설).
+
+    지금까지 계약 테스트는 파생 **수식**만 봤다(`table_surface_z + origin + pad`).
+    그래서 상수 자체가 자산과 어긋나도 전부 통과했다. 실제로 구 `env` 자산은 0.200,
+    `env_v1` 은 0.205 이고 그 5 mm 가 배포 계약(`fabric.table_z`)까지 따라간다.
+
+    datum: sim z=0 = 마운트 플레이트 상면. 실기 줄자·Fusion CAD 둘 다 0.205
+    (`sim2real/docs/TABLE_DATUM_2026-09-05.md`).
+    """
+    m = re.search(r"table_surface_z:\s*float\s*=\s*([0-9.]+)", _CFG)
+    assert m, "table_surface_z 선언을 못 찾았다"
+    declared = float(m.group(1))
+    assert declared == 0.205, f"table_surface_z 가 {declared} — 09.05 확정값은 0.205"
+
+    usda = _HERE.parents[5] / "assets/simulation_setting/env_v1/usd/env_v1.usda"
+    if not usda.is_file():          # 학습 서버에는 USD 만 배포된다
+        return
+    text = usda.read_text(encoding="utf-8", errors="replace")
+    block = re.search(r'def Mesh "Collision".*?point3f\[\] points = \[(.*?)\]', text, re.S)
+    assert block, "env_v1.usda 에 Collision 메시 points 가 없다"
+    zs = [float(z) for z in re.findall(
+        r"\(\s*[-\d.e+]+,\s*[-\d.e+]+,\s*([-\d.e+]+)\s*\)", block.group(1))]
+    assert zs, "Collision points 를 못 읽었다"
+    top = max(zs)
+    assert abs(top - declared) < 1e-6, (
+        f"자산 상면 {top:.6f} vs cfg {declared} — {abs(top - declared) * 1000:.1f} mm 어긋난다")
+    # 마운트 플레이트 상면이 곧 원점이어야 한다(로봇 spawn z=0 의 전제).
+    assert abs(min(z for z in zs if z >= -1e-9)) < 1e-6, \
+        "z=0 평면이 없다 — 마운트 플레이트 상면이 원점이 아니다"

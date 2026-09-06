@@ -335,7 +335,7 @@ def compute_grasp_s2r_rewards(
     # ★상한을 둔다 — 벌점이 크면 "테이블 근처에 아예 안 간다"가 되어 파지를 회피한다.
     _hf_w = _f(cfg, "hand_floor_penalty", 0.0)
     hand_floor = -(_hf_w * torch.relu(
-        _f(cfg, "hand_floor_z", 0.21) - hand_z_min)
+        _f(cfg, "hand_floor_z", 0.215) - hand_z_min)   # 기본값도 cfg(테이블 0.205+1cm)와 같게
     ).clamp(max=_f(cfg, "hand_floor_penalty_max", 5.0))
 
     terms = {

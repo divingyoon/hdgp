@@ -413,6 +413,45 @@ class GraspS2RControlMixin:
         self.robot.set_joint_velocity_target(
             float(self.cfg.hand_velocity_ff_scale) * self._syn_vel,
             joint_ids=self._syn_ids)
+        self._apply_gravity_compensation()
+
+    def _apply_gravity_compensation(self) -> None:
+        """팔 관절 중력 피드포워드 — 실기 pd 노드의 `model_tau_ff` 와 같은 자리.
+
+        τ = kp(q*−q) + kd(q̇*−q̇) + **τ_ff** 에서 마지막 항이다. 실기는 URDF 모델로,
+        여기서는 PhysX 가 정확히 계산한 값으로 만든다(학습 서버에는 URDF 가 없다 —
+        USD 만 배포된다). 두 값의 차이가 곧 실기 모델 오차이고, 그건 실기 쪽
+        `gravity.scale` 스윕으로 줄일 몫이다.
+
+        ★없으면 정책이 무엇을 하기 전에 손이 테이블에 박힌다(09.06 실측: 홈 유지만으로
+          손이 218mm 낙하 → 상판 아래 54.5mm, 관절 처짐 최대 13.8°).
+        ★손·머리는 대상이 아니다. 실기 손 드라이버에 중력보상이 없다.
+
+        ⚠⚠**이 보상 자체가 제어를 망가뜨릴 수 있다 — 학습 전에 반드시 검사할 것.**
+          τ_ff 는 PD 바깥에서 관절에 직접 토크를 넣는 경로라, 잘못 들어가면 증상이
+          "정책이 이상하다"로 위장된다. 최소 다음 넷을 재고 시작한다.
+
+          ① **정지 검증**: 홈 자세를 PD 로만 유지했을 때 관절 처짐이 ~0 인가.
+             기준 실측(600 스텝): 보상 0.0 → 최대 13.81° · 보상 1.0 → **최대 0.34°**.
+             0 을 크게 넘으면 과소보상, **음수로 뒤집히면 과대보상**이라 팔이 떠오른다.
+          ② **토크 여유**: τ_ff + PD 합이 `effort_limit_sim`(벤더 40/40/27/27/7/7/7)에
+             붙으면 클립돼 PD 권한이 조용히 줄어든다. 손목 7 N·m 가 가장 빠듯하다.
+             `applied_torque` 절대값이 한계에 닿는 비율을 볼 것.
+          ③ **리셋 순간**: 텔레포트 직후 한 스텝은 τ_ff 가 옛 자세로 계산될 수 있다.
+             리셋 직후 몇 스텝의 관절 속도가 튀지 않는지 볼 것.
+          ④ **질량 DR 과의 상호작용**: PhysX 보상은 **실제(랜덤화된) 질량**으로 계산되어
+             항상 정확한데, 실기 보상은 **고정 모델**이라 오차가 남는다. 질량을
+             랜덤화하면 sim 만 완벽해져 실기와 갈린다 — DR 을 켤 때 다시 볼 것.
+
+          그리고 실기와의 잔차 정합은 아직 미해결이다. 여기는 PhysX 정확값이라 잔차 0 에
+          가깝고, 실기는 URDF 모델이라 잔차가 남는다(구 자산 기준 12.76° → 2.05°).
+          그 차이를 줄이는 것은 실기 쪽 `gravity.scale` 스윕의 몫이다.
+        """
+        if self._grav_comp <= 0.0:
+            return
+        tau = self.robot.root_physx_view.get_gravity_compensation_forces()
+        self.robot.set_joint_effort_target(
+            self._grav_comp * tau[:, self._grav_ids_t], joint_ids=self._grav_ids)
 
     # ------------------------------------------------------------------
     # 손 — 관절공간 시너지

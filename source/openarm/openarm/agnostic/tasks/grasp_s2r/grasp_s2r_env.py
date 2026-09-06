@@ -60,6 +60,34 @@ class GraspS2REnv(GraspS2RControlMixin, DirectRLEnv):
         self._arm_ids_t = torch.tensor(self.arm_ids, device=self.device, dtype=torch.long)
         self._hand_ids_t = torch.tensor(self.hand_ids, device=self.device, dtype=torch.long)
 
+        # ---- 중력보상 대상 관절 (양팔 7×2) ------------------------------------------
+        # ★**팔만** 보상한다. 실기 DG-5F 드라이버는 중력보상이 없고(위치 PID p=1.5 뿐),
+        #   head 는 Dynamixel 로 따로 제어한다. 손·머리까지 보상하면 sim 만 안 처져서
+        #   실기와 갈린다. 유휴 팔도 포함 — 실기는 팔마다 같은 pd 노드가 붙는다.
+        # ★PhysX `get_gravity_compensation_forces()` 는 관절마다 **원위 전체의 무게**를
+        #   이미 반영한다. 실기 모델이 손을 payload 로 얹어 계산하는 것과 같은 양이다.
+        self._grav_ids, _grav_names = self.robot.find_joints("[rl]_aj_[1-7]")
+        self._grav_comp = (float(self.cfg.gravity_compensation)
+                           if bool(self.cfg.enable_gravity) else 0.0)
+        if self._grav_comp > 0.0 and len(self._grav_ids) == 0:
+            raise RuntimeError(
+                "[grasp_s2r] 중력보상을 켰는데 '[rl]_aj_[1-7]' 로 팔 관절을 하나도 못 찾았다")
+        self._grav_ids_t = torch.tensor(self._grav_ids, device=self.device, dtype=torch.long)
+
+        # ★부팅 가드: cfg 의도와 **실제로 조립된 spawn 속성**을 대조한다.
+        #   `finalize_after_overrides` 가 robot_cfg 를 재조립하므로 둘이 갈릴 수 있고,
+        #   실제로 probe 의 중력 플래그가 그렇게 조용히 무효였다(09.06).
+        _gr_off = bool(self.cfg.robot_cfg.spawn.rigid_props.disable_gravity)
+        if _gr_off == bool(self.cfg.enable_gravity):
+            raise RuntimeError(
+                "[grasp_s2r] 중력 스위치가 robot_cfg 에 반영되지 않았다 — "
+                f"enable_gravity={self.cfg.enable_gravity} vs "
+                f"spawn.disable_gravity={_gr_off}")
+        if _gr_off and self._grav_comp > 0.0:
+            raise RuntimeError(
+                "[grasp_s2r] 중력이 꺼졌는데 중력보상이 켜져 있다 — 중력을 두 번 지운다. "
+                "`env.gravity_compensation=0` 으로 끄라")
+
         palm_ids, _ = self.robot.find_bodies(p.palm_body)
         if len(palm_ids) != 1:
             raise RuntimeError(f"[{p.name}] palm_body '{p.palm_body}' 해석 실패: {palm_ids}")
@@ -298,7 +326,8 @@ class GraspS2REnv(GraspS2RControlMixin, DirectRLEnv):
         #   있는" 축이라(게인은 환경변수, DR 대상·마찰은 cfg 단계에서만 확정된다)
         #   나중에 로그만 보고도 어느 조합으로 돌았는지 알 수 있어야 한다.
         _specs = getattr(p, "actuator_specs", {})
-        _real = "right_arm_j1" in _specs
+        _as = _specs.get("right_arm_j1", _specs.get("left_arm_j1", {}))
+        _arm_g = f"kp{_as.get('stiffness', '?')}/kd{_as.get('damping', '?')}"
         _hs = next((v for k, v in _specs.items() if "hand" in k), {})
         _hand_g = f"kp{_hs.get('stiffness', '?')}/kd{_hs.get('damping', '?')}"
         _em = getattr(self, "event_manager", None)
@@ -309,11 +338,11 @@ class GraspS2REnv(GraspS2RControlMixin, DirectRLEnv):
                 _dr = str(_t.params["asset_cfg"].joint_names)
             except Exception:                      # noqa: BLE001
                 _dr = "(조회 실패)"
-        print(f"[grasp_s2r][s2r] 팔게인={'r2s 정합' if _real else 'KUKA 기본'}"
-              f"(cfg use_real_gains={bool(self.cfg.use_real_gains)}) · "
+        print(f"[grasp_s2r][s2r] 팔게인={_arm_g}(벤더 j1) · "
               f"손게인={_hand_g} · "
               f"게인DR대상={_dr} · 마찰범위={tuple(self.cfg.object_friction_range)} · "
-              f"로봇중력={'ON' if not self.cfg.robot_cfg.spawn.rigid_props.disable_gravity else 'OFF'}",
+              f"로봇중력={'ON' if not self.cfg.robot_cfg.spawn.rigid_props.disable_gravity else 'OFF'}"
+              f" · 중력보상={self._grav_comp}(팔 {len(self._grav_ids)}관절)",
               flush=True)
 
     # ------------------------------------------------------------------

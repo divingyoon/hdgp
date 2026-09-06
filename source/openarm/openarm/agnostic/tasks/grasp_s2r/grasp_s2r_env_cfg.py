@@ -31,6 +31,7 @@ from isaaclab.utils import configclass
 from isaaclab.envs import mdp as _mdp
 from isaaclab.managers import EventTermCfg, SceneEntityCfg
 
+from ...modules import vendor_gains as _vg
 from .robot_profiles import PROFILES, RobotProfile
 
 # DEXTRAH Kuka EventCfg 값.
@@ -107,37 +108,25 @@ class GraspS2REventCfg:
 
 
 def _build_robot_cfg(profile: RobotProfile,
-                     enable_self_collisions: bool) -> ArticulationCfg:
-    """프로필 → ArticulationCfg. 조인트 이름은 전부 프로필에서 온다."""
+                     enable_self_collisions: bool,
+                     enable_gravity: bool = True) -> ArticulationCfg:
+    """프로필 → ArticulationCfg. 조인트 이름은 전부 프로필에서 온다.
+
+    ★`enable_gravity` 는 **반드시 인자**여야 한다. USD spawn 속성이라 env 생성 뒤에는
+      못 바꾸는데, `GraspS2REnv.__init__` 이 `finalize_after_overrides()` 를 한 번 더
+      불러 robot_cfg 를 재조립한다. 그래서 생성 직전에 손으로 얹은 값은 지워진다 —
+      실제로 `probe_s2r_gravity_droop.py` 의 `--gravity` 플래그가 그렇게 **조용히
+      무효**였다(09.06 발견, on/off 가 같은 씬을 돌았다).
+    """
     return ArticulationCfg(
         prim_path="/World/envs/env_.*/Robot",
         spawn=sim_utils.UsdFileCfg(
             usd_path=_os.path.join(_ASSETS_DIR, profile.usd_relpath),
             activate_contact_sensors=True,
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
-                # ★★09.01 확정: **켜지 않는다.** 실기는 중력보상을 켠 채로 운용하므로
-                #   PD 가 보는 것은 중력이 상쇄된 잔차뿐이고, `disable_gravity=True` 가
-                #   바로 그 상태다. 여기서 중력을 켜면 **중력을 두 번 세는 것**이 된다.
-                #   실기 실측(08.31 우팔): 무보상 처짐 12.76° → 중력보상 후 **2.05°**.
-                #
-                #   ★09.01 sim probe 실측 (`probe_s2r_gravity_droop.py`, 손목 최대
-                #     지령↔실제 오차 [deg], 4 env · 300 스텝 정착):
-                #         게인      중력 OFF   중력 ON   중력 기여분
-                #         KUKA        1.889     4.791     +2.90
-                #         r2s 정합    1.162     5.668     **+4.51**
-                #     ⚠OFF 의 1~2° 는 처짐이 아니라 **fabric 정상상태 추종 오차**다
-                #       (무부하). 중력 성분은 두 열의 **차분**으로 읽는다.
-                #     ⚠실기 12.76°/2.05° 와 직접 비교하면 안 된다 — 저쪽은 정적 유지
-                #       측정이고 이쪽은 제어 루프가 능동적으로 버티는 중의 오차다.
-                #
-                #   판정: 중력을 켜면 실기(보상 ON, 잔차 2.05°)에 **없는** 2.9~4.5° 오차가
-                #   더해진다. 정합 게인에서 그 폭이 1.6배로 커지는 것도 확인됐다 —
-                #   그 게인 자체가 **중력보상을 전제로 동정된 값**이기 때문이다
-                #   (r2s collect 가 `gravity_comp_node.py` 를 필수로 요구하는 이유).
-                #   남는 실제 격차는 보상 잔차 2.05° 뿐이고, 그건 중력이 아니라 관절
-                #   바이어스로 넣을 문제다(현재는 안 넣는다 — obs qpos 노이즈 0.01 rad
-                #   이 실측의 10배라 그 안에 묻힌다).
-                disable_gravity=True,
+                # 중력 스위치·보상 근거는 cfg 필드 `enable_gravity` / `gravity_compensation`
+                # 주석에 있다. 여기서는 파생만 한다 — 숫자를 두 곳에 적지 않는다.
+                disable_gravity=not enable_gravity,
                 retain_accelerations=True,
                 linear_damping=0.0,
                 angular_damping=0.0,
@@ -238,19 +227,40 @@ class GraspS2REnvCfg(DirectRLEnvCfg):
     use_body_repulsion_pairs: bool = True
     enable_self_collisions: bool = False  # ★D3 기본 (09.01 승격)
 
-    # ---- 실기 정합 액추에이터 게인 (r2s 파이프라인 산출) ------------------------------
-    # ★★재생 무결성 필드다. 실제 게인 선택은 `robot_profiles.py` 가 **import 시점**에
-    #   `HDGP_S2R_REAL_GAINS` 환경변수로 하는데, 환경변수는 `params/env.yaml` dump 에
-    #   **안 남는다**. 그래서 이 게인으로 학습한 체크포인트를 나중에 환경변수 없이
-    #   재생하면 조용히 KUKA 게인으로 돌아간다 — m1_final 이 죽은 것과 같은 계열
-    #   (차원은 맞는데 의미가 다른 실패)이다.
-    #   이 필드는 **의도를 dump 에 남기고**, `finalize_after_overrides` 가 실제 프로필과
-    #   대조해 어긋나면 부팅에서 죽인다. 조용히 틀리는 대신 크게 실패한다.
-    #   기본값은 환경변수를 따르므로 기존 워크플로(`HDGP_S2R_REAL_GAINS=1 python train.py`)가
-    #   그대로 동작하고, dump 에는 해석된 bool 이 기록된다.
-    #   실측 근거: `sim2real/docs/R2S_FRAMEWORK.md` — 오버슈트 재현 오차 0.429 → 0.084.
-    #   ⚠이 게인은 **중력보상 전제**다(위 `disable_gravity=True` 주석 참조).
-    use_real_gains: bool = _os.environ.get("HDGP_S2R_REAL_GAINS") == "1"
+    # ---- 중력 (2026-09-06 사용자 확정) -----------------------------------------------
+    # **로봇 자체 중력 ON + 중력보상 ON.** 둘 다 켠다. 이유는 실기와 같게 만들기 위해서다.
+    #
+    # 실기 제어기(`sim2real/policy_control` pd 노드)는 `gravity.mode: model_tau_ff` 로
+    # τ_ff = scale ⊙ G(q_meas) 를 팔에 얹는다. 학습이 그걸 안 하면 **다른 로봇에서 배운 것**이
+    # 된다. 그래서 sim 도 같은 자리에 같은 피드포워드를 넣는다.
+    #
+    # ★왜 "중력 OFF" 로는 안 되는가: 겉보기 정지상태는 비슷해도 두 가지가 다르다.
+    #   ①실기 보상은 모델 기반이라 잔차가 남는다(무보상 12.76° → 보상 2.05°). 중력이
+    #     아예 없는 sim 에는 그 잔차를 만들 물리가 없다. ②컵·접촉·손 자중은 중력을 그대로
+    #     받아야 파지가 물리적으로 성립한다.
+    #
+    # ★왜 보상이 필요한가 (09.06 실측, 홈 자세를 PD 로만 유지):
+    #     보상 없음 → 손 최저 z 0.3685 → **0.1505** (상판 0.205 **아래 54.5mm**), 218mm 낙하
+    #                 관절 처짐 [4.98, 5.46, 1.85, 6.93, 13.81, 1.30, 13.60]°
+    #     중력 OFF  → 전 관절 **정확히 0.00°**, 손 z 0.3685 유지
+    #   즉 처짐은 100% 중력이다. 보상이 없으면 정책이 무엇을 하기도 전에 손이 테이블에
+    #   박힌 채로 에피소드가 시작된다(600 스텝 중 ~180 스텝이 낙하·정착에 쓰인다).
+    #   실기도 같은 12.76° 를 처지므로 이건 sim 만의 문제가 아니라 **하드웨어 문제**다.
+    enable_gravity: bool = True
+    # 팔 관절에 얹을 중력 피드포워드 배율. 0 이면 보상 없음.
+    # ★**팔에만** 건다. 실기 DG-5F 드라이버는 중력보상을 하지 않으므로(위치 PID p=1.5 뿐)
+    #   sim 손도 자중을 그대로 받아야 실기와 같다. head 도 제외(Dynamixel, 별도 제어).
+    # ★유휴 팔도 보상한다 — 실기는 팔마다 같은 pd 노드가 붙는다.
+    # ⚠**이 보상이 제어를 망가뜨릴 수 있다.** 학습 전 검사 항목 4종은
+    #   `grasp_s2r_control._apply_gravity_compensation` docstring 에 있다
+    #   (정지 처짐 · 토크 여유 · 리셋 순간 · 질량 DR 상호작용).
+    gravity_compensation: float = 1.0
+    # ---- 팔 PD 게인 ------------------------------------------------------------------
+    # ★2026-09-06 확정: 게인은 **벤더 `control_gains.yaml` 하나뿐**이다. 고를 것이 없으므로
+    #   구 `use_real_gains` 스위치와 `HDGP_S2R_REAL_GAINS` 환경변수를 **삭제했다**
+    #   (KUKA 300/45 분기가 사라진 뒤로는 항상 참인 조건을 환경변수와 대조하느라
+    #   부팅을 무조건 죽이고 있었다). 대신 조립된 게인이 정말 벤더값인지 대조한다 —
+    #   `_assert_vendor_gains`.
 
     # ---- 액션: palm 6D **홈 기준 델타** + 손 시너지 ----------------------------------
     # ★★grasp_v1 규약. `palm = 홈 + scale(a, −delta, +delta)` 이므로 **a=0 이 홈**이다.
@@ -379,13 +389,15 @@ class GraspS2REnvCfg(DirectRLEnvCfg):
     #   08.25 `grip-contact-cliff` 에서 "닿으면 보상이 꺼지니 접촉을 회피"가 실측됐다.
     #   세게 쥐는 것이 손해이되 **놓는 것보다는 낫게** 남기는 값이 0.3 이다.
     force_band_floor: float = 0.5  # ★D3 기본 (09.01 승격)
-    # 손 PD 토크 포화 판정: err ≥ effort_limit_sim / stiffness = 1.5 / 5.0.
+    # 손 PD 토크 포화 판정: err ≥ effort_limit_sim / stiffness = 1.5 / 1.5 = 1.00 rad.
+    # ★09.06 손 강성이 5.0 → 벤더 1.5 로 내려가 임계가 0.30 에서 1.00 이 됐다.
+    #   구 0.30 을 그대로 두면 3.3배 빡빡해 멀쩡한 오차를 "포화"로 센다.
     # ★`blocked_err_thr_rad` 와 값은 같지만 용도가 다르다 — 그쪽은 동결 게이트,
     #   이쪽은 "가동 관절이 천장에 붙어 있는 비율" 진단이다. 따로 둔다.
-    hand_torque_sat_err_rad: float = 0.30
-    # 손 PD 가 버틸 수 있는 최대 정적 오차 = effort_limit_sim / stiffness = 1.5 / 5.0.
+    hand_torque_sat_err_rad: float = 1.00
+    # 손 PD 가 버틸 수 있는 최대 정적 오차 = effort_limit_sim / stiffness = 1.5 / 1.5.
     # 이보다 크면 토크가 천장에 붙어 있다는 뜻이라 "막혔다"로 센다.
-    blocked_err_thr_rad: float = 0.30
+    blocked_err_thr_rad: float = 1.00
     blocked_limit_eps_rad: float = 0.05      # 관절 한계에서 이만큼 떨어져야 "외부에 막힘"
     # ★probe 가 자세를 **눈으로** 확인할 때만 켠다(기본 OFF — 학습 거동 불변).
     #   센서는 `clone_environments` 전에 만들어야 초기화되므로 `_setup_scene` 에서
@@ -637,7 +649,7 @@ class GraspS2REnvCfg(DirectRLEnvCfg):
     #     (E2 가 정확히 그 경우다)
     #   → 대신 **실측 손 최하단 링크 z** 에 벌점을 건다. 액션 좌표계 불변 + 실제 보장.
     # 실측 근거: `probe_s2r_hand_floor.py` — palm 원점 − 손최하단 = 개방 4.99 / 파지 5.66 cm,
-    #   최하단 링크는 `r_hl_pinky_tip`. 테이블 상면 0.200.
+    #   최하단 링크는 `r_hl_pinky_tip`. 테이블 상면 **0.205**(09.05 확정).
     hand_floor_z: float = 0.215              # 이 높이 아래로 내려가면 벌점 (테이블 0.205 + 1cm)
     hand_floor_penalty: float = 0.0          # ★기본 0 = 항등. 켤 때 권장 20~50
     hand_floor_penalty_max: float = 5.0      # ★상한 — 크면 "테이블 근처를 아예 회피"가 된다
@@ -701,8 +713,8 @@ class GraspS2REnvCfg(DirectRLEnvCfg):
     #     에서 우팔 손목이 배율 **0.7~2.0** 구간에서 주파수응답 0.666→0.498 로 **완만하게**
     #     변했다. 즉 그 구간이 동특성이 무너지지 않고 흔들리는 폭이다.
     #     (구 (0.8,1.2)는 근거 없이 제가 정한 값이었다.)
-    #   ★중심은 `use_real_gains=True` 일 때 곧 실측값이 된다 — 문서가 "ADR 중심을
-    #     실측값으로 옮기면 sim2real 강건성이 오른다"고 지목한 그 조합이다.
+    #   ★중심 1.0 은 이제 곧 벤더 실측값이다(게인이 벤더값 하나뿐이라) — 문서가
+    #     "ADR 중심을 실측값으로 옮기면 sim2real 강건성이 오른다"고 지목한 그 조합이다.
     adr_joint_gain_scale_max: tuple[float, float] = (1.0, 1.0)
     # ★★게인 DR 대상 관절. "arm"(기본) | "all".
     #   09.01 손 튜닝 완료로 **손은 대상에서 뺀다.** 근거 둘:
@@ -786,32 +798,35 @@ class GraspS2REnvCfg(DirectRLEnvCfg):
 
     robot_cfg: ArticulationCfg = None  # __post_init__ 에서 프로필로 조립
 
-    def _assert_gain_branch(self, profile) -> None:
-        """`use_real_gains` 의도와 **실제로 조립된 게인**이 일치하는지 부팅에서 대조.
+    def _assert_vendor_gains(self, profile) -> None:
+        """조립된 팔 actuator 게인이 **벤더 `control_gains.yaml` 값인지** 부팅에서 대조.
 
-        ★게인 선택은 `robot_profiles.py` 가 import 시점에 환경변수로 하므로 cfg
-          오버라이드로는 못 바꾼다. 그래서 여기서 할 수 있는 일은 "조용히 다른 게인으로
-          도는" 것을 막는 것뿐이다 — 어긋나면 **어떻게 고치는지까지** 알려주고 죽인다.
+        ★구 `_assert_gain_branch` 를 대체한다. 그쪽은 "KUKA 냐 r2s 냐"를 환경변수와
+          맞춰 보는 것이었는데, 09.06 로 선택지가 벤더값 하나만 남아 조건이 항상 참이 되고
+          기본 False 인 환경변수와 어긋나 **부팅을 무조건 죽이고 있었다.**
 
-        재생 시나리오: dump 가 `use_real_gains: true` 를 복원했는데 환경변수를 안 켜면
-        여기서 걸린다. 이게 없으면 4배 단단한 KUKA 게인으로 조용히 재생돼
-        "정책이 이상하다"는 오진으로 이어진다(m1_final 계열의 실패).
+        이 검사는 의미가 있다: 누가 태스크 코드에 게인 리터럴을 다시 써 넣으면 여기서
+        죽는다. 다른 게인으로 학습한 정책은 **다른 로봇에서 배운 것**이라 배포할 수 없다
+        (09.03 우팔 d3 = KUKA kp 300 학습 → 배포 불가).
+        관절 friction·effort limit 은 PD 게인이 아니라서 대조 대상이 아니다.
         """
-        _specs = set(profile.actuator_specs)
-        _kuka = "right_arm_proximal" in _specs
-        _real = "right_arm_j1" in _specs
-        if not (_kuka or _real):
-            return                      # 게인 분기가 없는 프로필(gripper_left 등)
-        if bool(self.use_real_gains) != _real:
-            _want = "실측 정합(r2s)" if self.use_real_gains else "KUKA 기본"
-            _got = "실측 정합(r2s)" if _real else "KUKA 기본"
-            raise RuntimeError(
-                f"[grasp_s2r] 게인 분기 불일치 — cfg 는 {_want} 을 요구하는데 "
-                f"프로필은 {_got} 으로 조립됐다.\n"
-                "  환경변수로 맞춰라: "
-                f"HDGP_S2R_REAL_GAINS={'1' if self.use_real_gains else '0'} "
-                "(robot_profiles.py 가 **import 시점**에 읽는다)\n"
-                "  ★재생이라면 dump 의 use_real_gains 가 진실이다.")
+        for name, spec in profile.actuator_specs.items():
+            exprs = spec.get("joint_names_expr", ())
+            if len(exprs) != 1:
+                continue
+            joint = exprs[0]
+            for side in _vg.SIDES:
+                for idx in _vg.ARM_JOINTS:
+                    if joint != _vg.joint_name(side, idx):
+                        continue
+                    kp, kd = _vg.load()[idx]
+                    got_kp, got_kd = spec.get("stiffness"), spec.get("damping")
+                    if (got_kp, got_kd) != (kp, kd):
+                        raise RuntimeError(
+                            f"[grasp_s2r] 팔 게인이 벤더값이 아니다 — actuator '{name}' "
+                            f"({joint}): kp {got_kp} kd {got_kd}, 벤더는 kp {kp} kd {kd}.\n"
+                            "  게인을 바꾸려면 벤더 yaml 을 고친다(태스크 코드가 아니라).\n"
+                            f"  출처: {_vg.VENDOR_GAINS_YAML}")
 
     def finalize_after_overrides(self) -> None:
         """cfg 필드에서 **파생되는 구조**를 다시 만든다. 멱등이어야 한다.
@@ -832,8 +847,8 @@ class GraspS2REnvCfg(DirectRLEnvCfg):
         #   `env.enable_self_collisions=False` 로 기동해야 하고, 그게 실리려면
         #   재구축이 여기 있어야 한다.
         self.robot_cfg = _build_robot_cfg(
-            profile, bool(self.enable_self_collisions))
-        self._assert_gain_branch(profile)
+            profile, bool(self.enable_self_collisions), bool(self.enable_gravity))
+        self._assert_vendor_gains(profile)
         if not bool(self.enable_events):
             self.events = None
         else:

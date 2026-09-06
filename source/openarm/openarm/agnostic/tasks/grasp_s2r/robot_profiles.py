@@ -15,6 +15,8 @@ from __future__ import annotations
 import os as _os
 from dataclasses import dataclass, field
 
+from openarm.agnostic.modules import vendor_gains as _vg
+
 
 @dataclass(frozen=True)
 class RobotProfile:
@@ -127,7 +129,7 @@ class RobotProfile:
 
 
 # =============================================================================
-# tesollo_right — a1 s2r 자산(openarm_tesollo_sensor_rl): DG-5F 우손 20 DOF
+# tesollo_right — s2r 자산(openarm_dg5f-m_bi_rl, 09.05 라인업): DG-5F-M 우손 20 DOF
 # 게인/effort 근거: grasp_sensor 실측 캘리브 승계 —
 #   팔 400/80 + friction(0.213/0.493/0.151, real2sim 07.29)
 #   손 k5/kd2(08.16 S1~S4 스윕: 구 400/60 은 토크 포화 레짐) + effort 1.5 N·m
@@ -139,20 +141,18 @@ _FINGERS = ("thumb", "index", "middle", "ring", "pinky")
 
 TESOLLO_RIGHT = RobotProfile(
     name="tesollo_right",
-    # ★★08.25 `_armhull`(팔 23 hull + 손 27 decomposition) → `_hull`(**50개 전부 hull**).
-    #   사용자 결정: DEXTRAH 는 전면 convexHull + 효율 위주 물리로 teacher→student 를
-    #   끝까지 성공시켰고 우리도 distillation 까지 가야 한다. 실제로 Kuka-Allegro 자산은
-    #   콜라이더 26개가 **손 17개 포함 전부 convexHull** 이다(SDF 0개).
-    #   자산은 physics 레이어만 교체한 얇은 변형(44KB, base 는 원본 108MB 심볼릭 링크).
-    #   ★★반대 실측이 하나 있다 — 되돌릴 때 근거가 되므로 지우지 않는다.
-    #     arm5080 A/B(08.23): 팔만 hull = 처리량 +13.7%, 접촉력 36.2→32.8N(편차 안).
-    #     그러나 **손까지 hull 로 하면 접촉력 133N** 으로 4배 뛰었다.
-    #     재현되면 촉각 obs 가 죽는다: env 가 `contact = (force/5).clamp(max=4)` 라
-    #     20N 에서 포화하므로 133N 이면 5채널이 전부 상수 4.0 이 되고, 감쌈 판정 임계
-    #     `stage_contact_threshold=0.1N` 도 모든 접촉에서 참이 된다.
+    # ★★2026-09-06 자산 교체: `openarm_tesollo_sensor_rl_hull` → `openarm_dg5f-m_bi_rl`.
+    #   09.05 자산 4종 재생성으로 구 자산은 트리에서 사라졌다(경로가 죽어 부팅 불가였다).
+    #   새 자산은 **좌우 모두 DG-5F-M 20 DOF** 라 좌팔이 그리퍼가 아니다 — 유휴 좌측
+    #   actuator/init 이 손 20관절로 바뀐다(아래).
+    #   ★콜라이더는 manifest 가 정한다: 팔·몸통·헤드 = convexHull, **손 = convexDecomposition**.
+    #     이게 08.23 실측이 지목한 안전한 쪽이다 — 팔만 hull 로 처리량 +13.7%, 접촉력
+    #     36.2→32.8N. **손까지 hull 로 하면 접촉력 133N** 으로 4배 뛰고 촉각 obs 가 죽는다
+    #     (env 가 `contact = (force/5).clamp(max=4)` 라 20N 에서 포화 → 5채널 상수 4.0,
+    #      감쌈 임계 `stage_contact_threshold=0.1N` 도 항상 참). 자산을 다시 만들 때 지키자.
     #   ★학습 로그에서 볼 것: `task/contact_*` 포화 · `task/wrap4` 가 1.0 에 붙는지 ·
-    #     `task/deep4` 와의 괴리. 붙으면 이 줄을 `_armhull` 로 되돌린다(1줄).
-    usd_relpath="robot/openarm_tesollo_sensor_rl_hull/openarm_tesollo_sensor_rl.usd",
+    #     `task/deep4` 와의 괴리.
+    usd_relpath="robot/openarm_dg5f-m_bi_rl/openarm_dg5f-m_bi_rl.usd",
     num_arm_joints=7,
     num_hand_joints=20,
     arm_joint_regex="r_aj_[1-7]",
@@ -168,7 +168,10 @@ TESOLLO_RIGHT = RobotProfile(
     # ★FK 게이트 0.0um 로 sensor_rl 에서 재생성한 자산(08.22). 레거시 openarm_tesollo /
     #   openarm_tesollo_sensor 는 같은 DG-5F 손이지만 팔 베이스가 +8mm 어긋나
     #   RL URDF 대비 worst 17.93mm 였다.
-    fabric_robot_dir="openarm_tesollo_sensor_right",
+    # ★09.06 dg5f-m 자산으로 이관. 구 `openarm_tesollo_sensor_right` 와 **완전 드롭인**:
+    #   링크 이름 104개·구동관절 27개 순서·body_repulsion 충돌구 프레임 65개가 전부 일치한다
+    #   (부팅 전 대조 완료). 그래서 `fabric_joint_order` 와 아래 매핑은 손대지 않는다.
+    fabric_robot_dir="openarm_dg5f-m_bi_right",
     # ★전용 params — 공유 openarm_tesollo_pose_params.yaml 을 쓸 수 없다(08.23).
     #   자매 트랙이 손가락 충돌 구를 실측 형상으로 재배치(반경 9mm·마디 방향)했는데,
     #   구 개수는 **마디 길이 ÷ 지름**으로 자동 산출되고 sensor_rl 자산은 bi_s 와
@@ -176,7 +179,7 @@ TESOLLO_RIGHT = RobotProfile(
     #   없는 `dg_1_2_sph3` 를 찾다 KeyError 로 부팅이 죽는다(실측). 반대로 공유 yaml 을
     #   덮어쓰면 bi_s 트랙이 깨진다 — 그래서 frames/radii 만 우리 것으로 바꾼 사본을 쓴다.
     #   쌍(collision_link_prefix_pairs)은 **접두사 매칭**이라 구 개수와 무관해 그대로다.
-    fabric_params_filename="openarm_tesollo_sensor_pose_params.yaml",
+    fabric_params_filename="openarm_dg5f-m_right_pose_params.yaml",
     # 팔 7 + 손 20, **finger-major**(생성기 FINGERS 순서 = thumb,index,middle,ring,pinky)
     fabric_joint_order=(
         tuple(f"r_aj_{i}" for i in range(1, 8))
@@ -282,7 +285,12 @@ TESOLLO_RIGHT = RobotProfile(
         # 유휴 좌팔(파지 팔 홈의 부호 미러, DG-5F IK 실측 — grasp_sensor preset 승계)
         "l_aj_1": -0.0431, "l_aj_2": -0.6706, "l_aj_3": -0.0961, "l_aj_4": 0.7342,
         "l_aj_5": -0.3750, "l_aj_6": -0.5678, "l_aj_7": -0.6709,
-        "l_hj_gripper_1": 0.044, "l_hj_gripper_2": 0.044,
+        # 유휴 좌손(dg5f-m). ★엄지 대향은 **좌우 부호가 반대**다 — 자산 실측:
+        #   `r_hj_thumb_2` [-3.142, 0] vs `l_hj_thumb_2` [0, +3.142]. 우 -1.57 의 거울은 +1.57 이고
+        #   0.0 을 넣으면 관절 하한에 붙는다. 나머지 19관절은 0.0 이 전부 범위 안이다.
+        "l_hj_thumb_2": 1.57,
+        **{f"l_hj_{f}_{j}": 0.0 for f in _FINGERS for j in (1, 2, 3, 4)
+           if not (f == "thumb" and j == 2)},
         "head_j_pan": 0.0, "head_j_tilt": 0.0,
     },
     actuator_specs={
@@ -415,42 +423,16 @@ TESOLLO_RIGHT = RobotProfile(
         #   ⚠friction 은 중력보상을 켠 채로 잰 값이라 잔여 중력을 일부 흡수했다
         #     (fit 경고: "standing load has landed in bias"). j2·j3 가 큰 이유일 수
         #     있다 — 보상 OFF 대조군을 받으면 갈라진다.
-        **(
-            {
-                "right_arm_j1": dict(joint_names_expr=["r_aj_1"], stiffness=70.0,
-                                     damping=7.053, friction=0.0,
-                                     effort_limit_sim=300.0),
-                "right_arm_j2": dict(joint_names_expr=["r_aj_2"], stiffness=70.0,
-                                     damping=4.182, friction=0.0,
-                                     effort_limit_sim=300.0),
-                "right_arm_j3": dict(joint_names_expr=["r_aj_3"], stiffness=70.0,
-                                     damping=7.804, friction=0.0,
-                                     effort_limit_sim=300.0),
-                "right_arm_j4": dict(joint_names_expr=["r_aj_4"], stiffness=60.0,
-                                     damping=6.531, friction=0.0,
-                                     effort_limit_sim=300.0),
-                "right_arm_j5": dict(joint_names_expr=["r_aj_5"], stiffness=10.0,
-                                     damping=2.236, friction=0.0,
-                                     effort_limit_sim=300.0),
-                "right_arm_j6": dict(joint_names_expr=["r_aj_6"], stiffness=10.0,
-                                     damping=0.580, friction=0.0,
-                                     effort_limit_sim=300.0),
-                "right_arm_j7": dict(joint_names_expr=["r_aj_7"], stiffness=10.0,
-                                     damping=0.242, friction=0.0,
-                                     effort_limit_sim=300.0),
-            }
-            if _os.environ.get("HDGP_S2R_REAL_GAINS") == "1"
-            else {
-                "right_arm_proximal": dict(joint_names_expr=["r_aj_[1-4]"], stiffness=300.0,
-                                           damping=45.0, effort_limit_sim=300.0),
-                "right_arm_j5":       dict(joint_names_expr=["r_aj_5"], stiffness=100.0,
-                                           damping=20.0, effort_limit_sim=300.0),
-                "right_arm_j6":       dict(joint_names_expr=["r_aj_6"], stiffness=50.0,
-                                           damping=15.0, effort_limit_sim=300.0),
-                "right_arm_j7":       dict(joint_names_expr=["r_aj_7"], stiffness=25.0,
-                                           damping=15.0, effort_limit_sim=300.0),
-            }
-        ),
+        # ══ 2026-09-06 사용자 확정: 팔 PD 게인은 **벤더값만** ═══════════════════
+        #   숫자는 `modules/vendor_gains` 하나에서만 온다(벤더 control_gains.yaml).
+        #   아래 히스토리 주석(KUKA 전환·r2s 재식별·HDGP_S2R_REAL_GAINS 스위치)은
+        #   그 결정으로 **전부 대체됐다** — 기록으로만 남긴다. 게인을 바꾸려면 벤더
+        #   yaml 을 고친다. ⚠동특성이 달라지므로 기존 체크포인트와 비호환(FRESH 전용).
+        # ★09.06 `effort_limit_sim=300.0` 삭제. 벤더 한계는 40/40/27/27/7/7/7 N·m 라
+        #   손목에서 **42배** 넘는 토크로 학습하고 있었다. 자산 URDF/USD 가 이미 벤더값을
+        #   담고 있으므로(joint limit effort) **지정하지 않는 것이 곧 벤더값**이다.
+        #   ⚠우 j7 은 정적 자세만으로 3.17 N·m(한계 7 의 45%)를 연속으로 문 이력이 있다.
+        **_vg.arm_actuators("right_arm", "r", friction=0.0),
         # ★★손 게인은 **Tesollo 실측**으로 간다(Kuka Allegro 값 3.0/0.1/0.5 로 덮였던 것을
         #   되돌림). grasp_v1 에 남아 있는 이 손의 kd 스윕이 근거다:
         #     kd 6.71 → 포화 20.5%(감쇠항 자체가 토크를 포화) · kd ≤ 0.5 → 정착속도 2배(채터)
@@ -461,10 +443,12 @@ TESOLLO_RIGHT = RobotProfile(
         #   안 났다(08.27: wrap_frac 이 전 런에서 0.000). 1.5/5.0 = 17.2° 로 회복.
         #   ⚠실기 d=0.0 이므로 이 damping 은 기계마찰의 sim 대역품 —
         #   r2s 복구 후 armature/joint friction 실측치로 교체할 것(grasp_v1 규약).
-        "hand":               dict(joint_names_expr=["r_hj_[a-z]+_[1-4]"], stiffness=5.0, damping=2.0,
-                                   effort_limit_sim=1.5),
-        "left_arm":           dict(joint_names_expr=["l_aj_[1-7]"], stiffness=400.0, damping=80.0),
-        "left_gripper":       dict(joint_names_expr=["l_hj_gripper_[1-2]"], stiffness=400.0, damping=80.0),
+        # 손 게인 = DG-5F 벤더 PID(2026-09-06). effort 는 게인이 아니라 유지.
+        **_vg.hand_actuator("hand", ["r_hj_[a-z]+_[1-4]"], effort_limit_sim=1.5),
+        **_vg.arm_actuators("left_arm", "l"),          # 유휴측도 벤더 게인(같은 로봇이다)
+        # 유휴 좌손도 같은 로봇이므로 벤더 DG-5F PID 를 쓴다(자산에 그리퍼는 없다).
+        **_vg.hand_actuator("left_hand", ["l_hj_[a-z]+_[1-4]"], effort_limit_sim=1.5),
+        # head 는 Dynamixel 이라 벤더 팔 파일에 없다(`vendor_gains.NO_VENDOR_PD`). 현행값 유지.
         "head":               dict(joint_names_expr=["head_j_(pan|tilt)"], stiffness=400.0, damping=80.0),
     },
     # ★★08.27 grasp_s2r: 구 (0.30, −0.20) → (0.362, −0.16).
@@ -504,7 +488,16 @@ GRIPPER_LEFT = RobotProfile(
     #   Fabrics body_repulsion 이 계획 단계에서 이미 회피하므로 팔은 껍질로 충분하다.
     #   ★손까지 hull 로 하면 접촉력이 4배(133N) → 촉각 왜곡으로 s2r 이 깨진다. 금지.
     #   자산은 physics 레이어만 교체한 얇은 변형(40KB, base 는 원본 심볼릭 링크).
-    usd_relpath="robot/openarm_tesollo_sensor_rl_armhull/openarm_tesollo_sensor_rl.usd",
+    # ★★2026-09-06 이 프로필은 **09.05 자산 라인업에서 고아가 됐다.** 필요한 것은
+    #   "좌 2지 그리퍼 + 우 DG-5F 손" 혼합 로봇인데 새 4종에는 그런 자산이 없다
+    #   (dg5f-m = 좌우 손, gripper = 좌우 그리퍼). 그나마 가까운 자산을 가리켜 두되,
+    #   **되살리려면 아래 3가지를 새로 실측해야 한다**:
+    #     ① 그리퍼 관절명: 새 자산은 `l_hj_gripper_[1-2]` 가 맞는지 확인 필요
+    #     ② 조 body 명: 새 자산은 `l_hl_gripper_{left,right}_finger` 다(구 `_1/_2` 아님)
+    #     ③ 유휴 우측: gripper 자산의 우측은 그리퍼라 `r_hj_[a-z]+_[1-4]` 가 없다
+    #   `fabric_class=None` 이라 등록에서 SKIPPED 되므로 지금은 스폰되지 않는다.
+    #   env 부팅의 regex 해석 대조가 fail-loud 로 다시 막는다.
+    usd_relpath="robot/openarm_gripper_bi_rl/openarm_gripper_bi_rl.usd",
     num_arm_joints=7,
     num_hand_joints=1,
     arm_joint_regex="l_aj_[1-7]",
@@ -536,13 +529,12 @@ GRIPPER_LEFT = RobotProfile(
         "head_j_pan": 0.0, "head_j_tilt": 0.0,
     },
     actuator_specs={
-        "left_arm_proximal": dict(joint_names_expr=["l_aj_[1-3]"], stiffness=400.0, damping=80.0, friction=0.213),
-        "left_arm_elbow":    dict(joint_names_expr=["l_aj_4"],     stiffness=400.0, damping=80.0, friction=0.493),
-        "left_arm_wrist":    dict(joint_names_expr=["l_aj_[5-7]"], stiffness=400.0, damping=80.0, friction=0.151),
+        # 게인=벤더값, friction=r2s 07.29 캘리브(마찰은 PD 게인이 아니라 벤더 규칙 밖).
+        **_vg.arm_actuators("left_arm", "l", friction=_vg.R2S_FRICTION),
         "left_gripper":      dict(joint_names_expr=["l_hj_gripper_[1-2]"], stiffness=400.0, damping=80.0),
-        "right_arm":         dict(joint_names_expr=["r_aj_[1-7]"], stiffness=400.0, damping=80.0),
-        "right_hand":        dict(joint_names_expr=["r_hj_[a-z]+_[1-4]"], stiffness=5.0, damping=2.0,
-                                  effort_limit_sim=1.5),
+        **_vg.arm_actuators("right_arm", "r"),         # 유휴측도 벤더 게인(같은 로봇이다)
+        # 손 게인 = DG-5F 벤더 PID(2026-09-06). effort 는 게인이 아니라 유지.
+        **_vg.hand_actuator("right_hand", ["r_hj_[a-z]+_[1-4]"], effort_limit_sim=1.5),
         "head":              dict(joint_names_expr=["head_j_(pan|tilt)"], stiffness=400.0, damping=80.0),
     },
     object_spawn_center=(0.30, 0.20),    # 좌측 미러
