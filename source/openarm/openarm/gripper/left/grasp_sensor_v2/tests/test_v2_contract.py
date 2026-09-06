@@ -1331,12 +1331,17 @@ def test_tip_floor_uses_lowest_point_not_one_body():
     assert "min(dim=1)" in seg and "minimum" in seg, "턱 링크들과 TCP 의 최소를 써야 한다"
 
 
-def test_vendor_gains_are_much_softer_than_the_sim_default():
-    """★이 격차가 '제어기가 정책 진동을 그대로 따라가는' 원인이다 —
-    기록으로 남겨 다음 사람이 배율을 다시 재지 않게 한다."""
+def test_v1_and_v2_both_use_the_vendor_gains():
+    """2026-09-06 이후 v1·v2 는 **같은 벤더값**이다(구 KUKA 테이퍼 300/45 는 폐기).
+
+    옛 계약은 "v1 이 벤더보다 4~20배 단단하다"를 기록했다. 그 격차가 정책 진동이
+    팔에 실리는 원인이었고, 해소 방법이 벤더 단일화였다. 이제 검사할 불변식은
+    **격차가 0 이라는 것**이다 — 어느 한쪽이 다시 갈라지면 여기서 잡힌다."""
+    from openarm.agnostic.modules import vendor_gains as VG
     from openarm.gripper.left.grasp_sensor import grasp_left_preset as V1
-    assert V1.ARM_IK_STIFFNESS["l_aj_[1-4]"] / P.LEFT_ARM_VENDOR_STIFFNESS["l_aj_1"] > 4.0
-    assert V1.ARM_IK_DAMPING["l_aj_7"] / P.LEFT_ARM_VENDOR_DAMPING["l_aj_7"] > 20.0
+    assert V1.ARM_IK_STIFFNESS == P.LEFT_ARM_VENDOR_STIFFNESS == VG.stiffness("l")
+    assert V1.ARM_IK_DAMPING == P.LEFT_ARM_VENDOR_DAMPING == VG.damping("l")
+    assert 300.0 not in V1.ARM_IK_STIFFNESS.values(), "KUKA 테이퍼가 되살아났다"
 
 
 def test_tip_floor_margin_stays_within_the_measured_graspable_band():

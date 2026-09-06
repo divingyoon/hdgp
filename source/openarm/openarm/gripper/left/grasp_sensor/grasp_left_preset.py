@@ -23,6 +23,8 @@
 
 from __future__ import annotations
 
+from openarm.agnostic.modules import vendor_gains as _vg
+
 import math
 import math as _math
 import os as _os
@@ -126,8 +128,14 @@ ACTION_PENALTY_CURRICULUM_STEPS = 36000
 #   → effort 300 이 포화를 없애고, 그 다음에야 중력 보상이 작동한다(기준 조건에서
 #     보상이 무력했던 이유가 clamp 17.5 mrad 였다).
 #   ⚠ kp 를 낮추면 처짐 자체는 커진다(err = τ중력/kp). 보상과 **함께**여야 한다.
-ARM_IK_STIFFNESS = {"l_aj_[1-4]": 300.0, "l_aj_5": 100.0, "l_aj_6": 50.0, "l_aj_7": 25.0}
-ARM_IK_DAMPING = {"l_aj_[1-4]": 45.0, "l_aj_5": 20.0, "l_aj_6": 15.0, "l_aj_7": 15.0}
+# ══ 2026-09-06 사용자 확정: 팔 PD 게인은 **벤더값만** ════════════════════════
+#   위 실측 기록(kp 테이퍼 300/100/50/25 · kd 45/20/15/15)은 그 결정으로 대체됐다.
+#   그 값들은 KUKA 스타일 테이퍼였고 **실기 모터에 들어가는 값이 아니었다**.
+#   벤더 kp 는 손목이 이미 10 이라 테이퍼의 목적(원위를 부드럽게)을 그 자체로 만족한다.
+#   effort 300 · 중력보상 전제는 그대로 유효하다(포화 대책이지 게인 선택이 아니다).
+#   ⚠동특성이 달라지므로 이 값으로 학습한 기존 체크포인트와 비호환(FRESH 전용).
+ARM_IK_STIFFNESS = _vg.stiffness("l")
+ARM_IK_DAMPING = _vg.damping("l")
 
 # ★★anti-windup 상한 = **effort 한계 / 강성**. 목표가 실제 관절보다 이만큼 앞서면 PD 가
 #   effort 한계만큼의 토크를 내므로, 그 이상 앞서 봐야 힘이 더 안 나오고 windup 만 쌓인다.

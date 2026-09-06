@@ -24,6 +24,8 @@ from __future__ import annotations
 import dataclasses as _dc
 from dataclasses import dataclass, field
 
+from . import vendor_gains
+
 
 # =============================================================================
 # 자산
@@ -227,49 +229,72 @@ class RobotProfile:
 
 # =============================================================================
 # 액추에이터 게인 — 근거
-#   팔  400/80 + friction(0.213/0.493/0.151)  ← real2sim 07.29 우팔 캘리브
+#   팔  **벤더 control_gains.yaml 만**(2026-09-06 사용자 확정)  ← `vendor_gains`
+#       kp 70/70/70/60/10/10/10 · kd 2.75/2.5/2.0/2.0/0.7/0.6/0.5
+#       ⚠구 400/80(real2sim 07.29 캘리브)은 폐기했다. 실기보다 4~10배 뻣뻣해
+#         정책 진동이 팔에 그대로 실렸고, 무엇보다 **실기 모터에 들어가는 값이
+#         아니었다** — 다른 게인으로 학습한 정책은 배포할 수 없다(09.03 우팔 d3).
+#       ⚠게인이 바뀌면 동특성이 바뀐다 ⇒ 기존 체크포인트와 **호환되지 않는다**
+#         (FRESH 학습 전용).
 #   손  k5/kd2 + effort 1.5 N·m               ← 08.16 S1~S4 스윕
 #       (구 400/60 은 토크 포화 레짐: 요구 143 N·m = effort limit 의 19배라
 #        목표를 더 밀어도 힘이 안 오른다 = retighten/squeeze 실패의 공통 원인)
 # =============================================================================
-_ARM_GAINS = dict(stiffness=400.0, damping=80.0)
 # ★URDF/USD 실측 effort limit [N·m] — 부위별로 다르다.
 #   USD 에 이미 들어 있어(maxForce 40/40/27/27/7/7/7) 지정하지 않아도 적용되지만,
 #   **명시해 두면 자산이 바뀌었을 때 조용히 달라지지 않는다.**
 _ARM_EFFORT = {"proximal": 40.0, "elbow": 27.0, "wrist": 7.0}
-# ★★KUKA 고정(08.25) 손 감쇠비. 원본 allegro 는 kp 3.0 / kd 0.1 로 kd/kp = 0.033
-#   인데 우리는 5.0 / 2.0 = **0.40 (12 배 과감쇠)** 였다. 손은 fabric 이 아니라 PD
-#   직결이라 속도 목표가 없다 — 감쇠항 kd·(0 − q̇) 가 그대로 상시 지연이 된다
-#   (팔에서 속도 피드포워드를 복구해 B 14.87 → 3.30mm 로 잡은 것과 같은 결함).
-#   kp 5.0 은 08.16 S1~S4 스윕(effort 1.5 N·m 포화 회피) 근거가 있어 유지하고,
-#   비율만 원본에 맞춰 kd = 5.0 × 0.033 = 0.165 로 내린다.
-_HAND_GAINS = dict(stiffness=5.0, damping=0.165, effort_limit_sim=1.5)
+#: actuator 그룹 ↔ 관절 번호. friction 이 부위마다 달라 그룹이 나뉜다(게인은 벤더값).
+_ARM_GROUPS = {"proximal": (1, 2, 3), "elbow": (4,), "wrist": (5, 6, 7)}
+_ARM_GROUP_EXPR = {"proximal": "[1-3]", "elbow": "4", "wrist": "[5-7]"}
+# ★2026-09-06 사용자 확정: DG-5F 손도 **벤더 기본(p 1.5 · d 0)** 으로 통일한다.
+#   위 08.25 KUKA 감쇠비 논의(5.0/0.165)와 08.16 스윕(kp 5.0)은 그 결정으로 대체됐다 —
+#   둘 다 실기 드라이버가 받는 값이 아니었다. effort 한계 1.5 N·m 는 게인이 아니라 유지.
+#   ⚠벤더 d=0 이다. sim 관절에는 실기 손의 기계 마찰이 없으므로 채터가 보이면
+#     damping 이 아니라 `friction` 으로 메운다(마찰은 벤더 규칙 밖).
+_TESOLLO_HAND_EFFORT = 1.5
+# ★RH56F1 손은 **벤더 PD 가 존재하지 않는다**(RS-485 위치 서보 — vendor_gains.NO_VENDOR_PD).
+#   규칙의 명시 예외라 기존 값을 그대로 둔다.
+_RH56_HAND_GAINS = dict(stiffness=5.0, damping=0.165, effort_limit_sim=1.5)
 _FRICTION = {"proximal": 0.213, "elbow": 0.493, "wrist": 0.151}
 
 
 def _arm_actuators(prefix: str, side: str) -> dict:
-    """한쪽 팔의 부위별 actuator 3그룹 (friction 이 부위마다 다르다)."""
+    """한쪽 팔의 부위별 actuator 3그룹.
+
+    게인은 관절마다 `vendor_gains` 에서 온다(숫자를 여기 적지 않는다). 그룹이 나뉜
+    이유는 friction·effort limit 이 부위마다 다르기 때문이다.
+    """
     return {
-        f"{prefix}_arm_proximal": dict(joint_names_expr=[f"{side}_aj_[1-3]"],
-                                       friction=_FRICTION["proximal"],
-                                       effort_limit_sim=_ARM_EFFORT["proximal"], **_ARM_GAINS),
-        f"{prefix}_arm_elbow":    dict(joint_names_expr=[f"{side}_aj_4"],
-                                       friction=_FRICTION["elbow"],
-                                       effort_limit_sim=_ARM_EFFORT["elbow"], **_ARM_GAINS),
-        f"{prefix}_arm_wrist":    dict(joint_names_expr=[f"{side}_aj_[5-7]"],
-                                       friction=_FRICTION["wrist"],
-                                       effort_limit_sim=_ARM_EFFORT["wrist"], **_ARM_GAINS),
+        f"{prefix}_arm_{part}": dict(
+            joint_names_expr=[f"{side}_aj_{_ARM_GROUP_EXPR[part]}"],
+            friction=_FRICTION[part], effort_limit_sim=_ARM_EFFORT[part],
+            **vendor_gains.subset(side, joints))
+        for part, joints in _ARM_GROUPS.items()
     }
 
 
-_HEAD_ACTUATOR = {"head": dict(joint_names_expr=["head_j_(pan|tilt)"], **_ARM_GAINS)}
+# ★머리는 Dynamixel 이라 **OpenArm 벤더 게인이 적용되지 않는다**(그 파일은 팔 7관절만
+#   담는다). 실기 머리는 위치 모드 + I게인 400 이고 정책이 명령하지 않는다(상태만 읽는다)
+#   — sim 에서는 자세를 붙들어 두기만 하면 되므로 팔과 무관한 자체 값을 쓴다.
+_HEAD_GAINS = dict(stiffness=400.0, damping=80.0)
+_HEAD_ACTUATOR = {"head": dict(joint_names_expr=["head_j_(pan|tilt)"], **_HEAD_GAINS)}
+
+# ★스톡 2지 그리퍼의 조(prismatic, m). **벤더 게인을 쓸 수 없는 자리**다:
+#   벤더값 GRIPPER_KP 5.0 / GRIPPER_KD 0.1(openarm_real v10_simple_hardware.hpp)은
+#   모터축 회전 게인[N·m/rad]인데 URDF 조는 직동[m]이라 리드스크류 환산 없이는
+#   같은 물리량이 아니다(환산은 아직 아무도 하지 않았다 — 미해결 항목).
+#   숫자는 그래서 이전 값을 그대로 둔다. 배포된 좌 그리퍼 트랙은 자체 cfg 에서
+#   2000/100 을 쓴다(`gripper/left/grasp_sensor/grasp_left_env_cfg.py`).
+#   ⚠팔 액추에이터 게인을 조에 물려 쓰던 것을 끊은 자리다 — 조는 팔과 무관하다.
+_GRIPPER_JAW_GAINS = dict(stiffness=400.0, damping=80.0)
 
 _TESOLLO_FINGERS = ("thumb", "index", "middle", "ring", "pinky")
 
 
 def _tesollo_hand_actuator(prefix: str, side: str) -> dict:
-    return {f"{prefix}_hand": dict(
-        joint_names_expr=[f"{side}_hj_[a-z]+_[1-4]"], **_HAND_GAINS)}
+    return vendor_gains.hand_actuator(f"{prefix}_hand", [f"{side}_hj_[a-z]+_[1-4]"],
+                                      effort_limit_sim=_TESOLLO_HAND_EFFORT)
 
 
 def _tesollo_hand_rest(side: str) -> dict:
@@ -499,7 +524,7 @@ SENS_RIGHT = _dc.replace(
     actuator_specs={
         **_arm_actuators("active", "r"), **_tesollo_hand_actuator("active", "r"),
         **_arm_actuators("idle", "l"),
-        "idle_gripper": dict(joint_names_expr=["l_hj_gripper_[1-2]"], **_ARM_GAINS),
+        "idle_gripper": dict(joint_names_expr=["l_hj_gripper_[1-2]"], **_GRIPPER_JAW_GAINS),
         **_HEAD_ACTUATOR,
     },
 )
@@ -539,7 +564,7 @@ SENS_LEFT_GRIPPER = RobotProfile(
     },
     actuator_specs={
         **_arm_actuators("active", "l"),
-        "active_gripper": dict(joint_names_expr=["l_hj_gripper_[1-2]"], **_ARM_GAINS),
+        "active_gripper": dict(joint_names_expr=["l_hj_gripper_[1-2]"], **_GRIPPER_JAW_GAINS),
         **_arm_actuators("idle", "r"), **_tesollo_hand_actuator("idle", "r"),
         **_HEAD_ACTUATOR,
     },
@@ -567,8 +592,9 @@ def _rh56_hand_rest(side: str) -> dict:
 
 
 def _rh56_hand_actuator(prefix: str, side: str) -> dict:
+    """★벤더 PD 없음(NO_VENDOR_PD['rh56f1_hand']) — 벤더 규칙의 명시 예외."""
     return {f"{prefix}_hand": dict(
-        joint_names_expr=[f"{side}_hj_[a-z]+_[1-4]"], **_HAND_GAINS)}
+        joint_names_expr=[f"{side}_hj_[a-z]+_[1-4]"], **_RH56_HAND_GAINS)}
 
 
 def _rh56_profile(*, side: str, spawn_center: tuple) -> RobotProfile:

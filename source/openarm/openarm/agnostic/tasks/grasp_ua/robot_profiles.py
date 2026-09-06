@@ -15,6 +15,8 @@ from __future__ import annotations
 import os as _os
 from dataclasses import dataclass, field
 
+from openarm.agnostic.modules import vendor_gains as _vg
+
 
 @dataclass(frozen=True)
 class RobotProfile:
@@ -468,42 +470,12 @@ TESOLLO_RIGHT = RobotProfile(
         #   ⚠friction 은 중력보상을 켠 채로 잰 값이라 잔여 중력을 일부 흡수했다
         #     (fit 경고: "standing load has landed in bias"). j2·j3 가 큰 이유일 수
         #     있다 — 보상 OFF 대조군을 받으면 갈라진다.
-        **(
-            {
-                "right_arm_j1": dict(joint_names_expr=["r_aj_1"], stiffness=70.0,
-                                     damping=7.053, friction=0.0,
-                                     effort_limit_sim=300.0),
-                "right_arm_j2": dict(joint_names_expr=["r_aj_2"], stiffness=70.0,
-                                     damping=4.182, friction=0.0,
-                                     effort_limit_sim=300.0),
-                "right_arm_j3": dict(joint_names_expr=["r_aj_3"], stiffness=70.0,
-                                     damping=7.804, friction=0.0,
-                                     effort_limit_sim=300.0),
-                "right_arm_j4": dict(joint_names_expr=["r_aj_4"], stiffness=60.0,
-                                     damping=6.531, friction=0.0,
-                                     effort_limit_sim=300.0),
-                "right_arm_j5": dict(joint_names_expr=["r_aj_5"], stiffness=10.0,
-                                     damping=2.236, friction=0.0,
-                                     effort_limit_sim=300.0),
-                "right_arm_j6": dict(joint_names_expr=["r_aj_6"], stiffness=10.0,
-                                     damping=0.580, friction=0.0,
-                                     effort_limit_sim=300.0),
-                "right_arm_j7": dict(joint_names_expr=["r_aj_7"], stiffness=10.0,
-                                     damping=0.242, friction=0.0,
-                                     effort_limit_sim=300.0),
-            }
-            if _os.environ.get("HDGP_S2R_REAL_GAINS") == "1"
-            else {
-                "right_arm_proximal": dict(joint_names_expr=["r_aj_[1-4]"], stiffness=300.0,
-                                           damping=45.0, effort_limit_sim=300.0),
-                "right_arm_j5":       dict(joint_names_expr=["r_aj_5"], stiffness=100.0,
-                                           damping=20.0, effort_limit_sim=300.0),
-                "right_arm_j6":       dict(joint_names_expr=["r_aj_6"], stiffness=50.0,
-                                           damping=15.0, effort_limit_sim=300.0),
-                "right_arm_j7":       dict(joint_names_expr=["r_aj_7"], stiffness=25.0,
-                                           damping=15.0, effort_limit_sim=300.0),
-            }
-        ),
+        # ══ 2026-09-06 사용자 확정: 팔 PD 게인은 **벤더값만** ═══════════════════
+        #   숫자는 `modules/vendor_gains` 하나에서만 온다(벤더 control_gains.yaml).
+        #   아래 히스토리 주석(KUKA 전환·r2s 재식별·HDGP_S2R_REAL_GAINS 스위치)은
+        #   그 결정으로 **전부 대체됐다** — 기록으로만 남긴다. 게인을 바꾸려면 벤더
+        #   yaml 을 고친다. ⚠동특성이 달라지므로 기존 체크포인트와 비호환(FRESH 전용).
+        **_vg.arm_actuators("right_arm", "r", friction=0.0, effort_limit_sim=300.0),
         # ★★손 게인은 **Tesollo 실측**으로 간다(Kuka Allegro 값 3.0/0.1/0.5 로 덮였던 것을
         #   되돌림). grasp_v1 에 남아 있는 이 손의 kd 스윕이 근거다:
         #     kd 6.71 → 포화 20.5%(감쇠항 자체가 토크를 포화) · kd ≤ 0.5 → 정착속도 2배(채터)
@@ -514,9 +486,9 @@ TESOLLO_RIGHT = RobotProfile(
         #   안 났다(08.27: wrap_frac 이 전 런에서 0.000). 1.5/5.0 = 17.2° 로 회복.
         #   ⚠실기 d=0.0 이므로 이 damping 은 기계마찰의 sim 대역품 —
         #   r2s 복구 후 armature/joint friction 실측치로 교체할 것(grasp_v1 규약).
-        "hand":               dict(joint_names_expr=["r_hj_[a-z]+_[1-4]"], stiffness=5.0, damping=2.0,
-                                   effort_limit_sim=1.5),
-        "left_arm":           dict(joint_names_expr=["l_aj_[1-7]"], stiffness=400.0, damping=80.0),
+        # 손 게인 = DG-5F 벤더 PID(2026-09-06). effort 는 게인이 아니라 유지.
+        **_vg.hand_actuator("hand", ["r_hj_[a-z]+_[1-4]"], effort_limit_sim=1.5),
+        **_vg.arm_actuators("left_arm", "l"),          # 유휴측도 벤더 게인(같은 로봇이다)
         "left_gripper":       dict(joint_names_expr=["l_hj_gripper_[1-2]"], stiffness=400.0, damping=80.0),
         "head":               dict(joint_names_expr=["head_j_(pan|tilt)"], stiffness=400.0, damping=80.0),
     },
@@ -748,13 +720,8 @@ RH56F1_RIGHT = RobotProfile(
         #     직접 원인). RH56F1 은 물려받을 체크포인트도 없으니 처음부터 실기값으로 간다.
         #   ⚠kd 는 **벤더값이지 r2s 정합값이 아니다** — RH56F1 손을 단 채 재식별하기
         #     전까지는 출발점이다(tesollo 는 손 1.763 kg 을 달고 여진으로 재식별했다).
-        "right_arm_j1": dict(joint_names_expr=["r_aj_1"], stiffness=70.0, damping=2.75),
-        "right_arm_j2": dict(joint_names_expr=["r_aj_2"], stiffness=70.0, damping=2.50),
-        "right_arm_j3": dict(joint_names_expr=["r_aj_3"], stiffness=70.0, damping=2.00),
-        "right_arm_j4": dict(joint_names_expr=["r_aj_4"], stiffness=60.0, damping=2.00),
-        "right_arm_j5": dict(joint_names_expr=["r_aj_5"], stiffness=10.0, damping=0.70),
-        "right_arm_j6": dict(joint_names_expr=["r_aj_6"], stiffness=10.0, damping=0.60),
-        "right_arm_j7": dict(joint_names_expr=["r_aj_7"], stiffness=10.0, damping=0.50),
+        # 값은 같지만 출처를 모듈로 돌린다(2026-09-06 벤더 게인 단일 출처 규칙).
+        **_vg.arm_actuators("right_arm", "r"),
         # 손 구동 6 — 선행 rh56f1 트랙 값(굴곡 400/60 · 엄지 외전 200/35).
         # ⚠이 자산의 손 effort 는 **1 N·m** 다(벤더 URDF 값, tesollo 1.5~7.5 대비 낮다).
         #   게인 400 은 그 상한에서 포화할 수 있다 — 파지력 실측 전까지 미지수다
@@ -772,7 +739,7 @@ RH56F1_RIGHT = RobotProfile(
                                  stiffness=5.0, damping=2.0),
         "right_hand_abd":   dict(joint_names_expr=["r_hj_thumb_1"], stiffness=5.0, damping=2.0),
         # 유휴 좌팔·좌손 (hold). ★좌손도 구동 6만 — 좌측 종속 6도 DriveAPI 가 없다.
-        "left_arm":        dict(joint_names_expr=["l_aj_[1-7]"], stiffness=400.0, damping=80.0),
+        **_vg.arm_actuators("left_arm", "l"),        # 유휴측도 벤더 게인(같은 로봇이다)
         "left_hand":       dict(joint_names_expr=["l_hj_[a-z]+_[1-4]"], stiffness=30.0, damping=5.0),
         "head":            dict(joint_names_expr=["head_j_(pan|tilt)"], stiffness=400.0, damping=80.0),
     },
@@ -836,13 +803,12 @@ GRIPPER_LEFT = RobotProfile(
         "head_j_pan": 0.0, "head_j_tilt": 0.0,
     },
     actuator_specs={
-        "left_arm_proximal": dict(joint_names_expr=["l_aj_[1-3]"], stiffness=400.0, damping=80.0, friction=0.213),
-        "left_arm_elbow":    dict(joint_names_expr=["l_aj_4"],     stiffness=400.0, damping=80.0, friction=0.493),
-        "left_arm_wrist":    dict(joint_names_expr=["l_aj_[5-7]"], stiffness=400.0, damping=80.0, friction=0.151),
+        # 게인=벤더값, friction=r2s 07.29 캘리브(마찰은 PD 게인이 아니라 벤더 규칙 밖).
+        **_vg.arm_actuators("left_arm", "l", friction=_vg.R2S_FRICTION),
         "left_gripper":      dict(joint_names_expr=["l_hj_gripper_[1-2]"], stiffness=400.0, damping=80.0),
-        "right_arm":         dict(joint_names_expr=["r_aj_[1-7]"], stiffness=400.0, damping=80.0),
-        "right_hand":        dict(joint_names_expr=["r_hj_[a-z]+_[1-4]"], stiffness=5.0, damping=2.0,
-                                  effort_limit_sim=1.5),
+        **_vg.arm_actuators("right_arm", "r"),         # 유휴측도 벤더 게인(같은 로봇이다)
+        # 손 게인 = DG-5F 벤더 PID(2026-09-06). effort 는 게인이 아니라 유지.
+        **_vg.hand_actuator("right_hand", ["r_hj_[a-z]+_[1-4]"], effort_limit_sim=1.5),
         "head":              dict(joint_names_expr=["head_j_(pan|tilt)"], stiffness=400.0, damping=80.0),
     },
     object_spawn_center=(0.30, 0.20),    # 좌측 미러

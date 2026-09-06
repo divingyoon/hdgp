@@ -40,6 +40,8 @@ lift 레시피는 정반대다:
 
 from __future__ import annotations
 
+from openarm.agnostic.modules import vendor_gains as _vg
+
 import os as _os
 
 import isaaclab.sim as sim_utils
@@ -166,8 +168,9 @@ class GraspLeftGripperEnvCfg(LiftEnvCfg):
                     joint_names_expr=["l_aj_[1-7]"],
                     velocity_limit_sim=P.ARM_VELOCITY_LIMIT,
                     effort_limit_sim=P.ARM_EFFORT_LIMIT,
-                    stiffness=80.0,
-                    damping=4.0,
+                    # 2026-09-06: 팔 게인은 벤더값만. fab/v2 가 같은 값으로 덮으므로 항등식이다.
+                    stiffness=P.ARM_IK_STIFFNESS,
+                    damping=P.ARM_IK_DAMPING,
                 ),
                 # 그리퍼: 두 관절 모두 커버리지를 준다(없으면 무구동 자유이동).
                 # ★지령도 두 관절 모두에 간다 — USD 에 mimic 이 없다(preset 주석 참조).
@@ -188,8 +191,11 @@ class GraspLeftGripperEnvCfg(LiftEnvCfg):
                 #   이 팔은 학습에 쓰이지 않는 배경이고 실기로 배포되지도 않으므로,
                 #   sim 에서 자세만 고정되면 된다.
                 "idle_right_arm": ImplicitActuatorCfg(
-                    joint_names_expr=["r_aj_[1-7]"],
-                    stiffness=400.0, damping=80.0, effort_limit_sim=1000.0,
+                    joint_names_expr=["r_aj_[1-7]"], effort_limit_sim=1000.0,
+                    # 유휴측이라도 팔 게인은 벤더값만(2026-09-06) — 같은 로봇이다.
+                    # ★effort 를 게인보다 **앞에** 둔다: 계약 테스트가 소스에서 이 항목을
+                    #   첫 ")," 까지 잘라 읽으므로 _vg.stiffness("r") 뒤에 두면 안 보인다.
+                    stiffness=_vg.stiffness("r"), damping=_vg.damping("r"),
                 ),
                 # 유휴 오른손도 같은 이유로 올린다. effort 1.5 는 실기 정합값이지만
                 # 그건 **파지를 학습하는 손**에 필요한 것이고, 여기 오른손은 배경이다.

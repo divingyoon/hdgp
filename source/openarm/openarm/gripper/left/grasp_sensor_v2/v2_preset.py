@@ -24,6 +24,8 @@ v1(`grasp_sensor`)의 기하·자산·홈·스폰·액션 상수는 실측으로
 
 from __future__ import annotations
 
+from openarm.agnostic.modules import vendor_gains as _vg
+
 import math
 
 # v1 상수를 전부 재수출한다 — v2 는 골격을 공유하므로 두 벌로 갈라 두면 반드시 어긋난다.
@@ -705,14 +707,10 @@ LIFT_RAMP_ZERO_Z = CUP_SPAWN_Z + 0.002      # +6.0mm → +2.0mm
 #     감쇠된** 쪽으로 치우칠 가능성이 크다 — 정책이 더 흔들리는 팔에서 배우게 되므로
 #     전이 관점에서는 보수적인 방향이다. 좌팔 여진 측정이 나오면 교체할 것.
 # ⚠⚠ 게인이 바뀌면 동특성이 바뀐다 ⇒ **FRESH 학습이 기본**(R2S 문서 §배포).
-LEFT_ARM_VENDOR_STIFFNESS = {
-    "l_aj_1": 70.0, "l_aj_2": 70.0, "l_aj_3": 70.0, "l_aj_4": 60.0,
-    "l_aj_5": 10.0, "l_aj_6": 10.0, "l_aj_7": 10.0,
-}
-LEFT_ARM_VENDOR_DAMPING = {
-    "l_aj_1": 2.75, "l_aj_2": 2.50, "l_aj_3": 2.00, "l_aj_4": 2.00,
-    "l_aj_5": 0.70, "l_aj_6": 0.60, "l_aj_7": 0.50,
-}
+# ★사본을 두지 않는다 — 벤더 yaml 한 곳에서만 읽는다(2026-09-06 단일 출처 규칙).
+#   v1 preset 의 ARM_IK_* 도 같은 값이 되었으므로 아래 오버라이드는 이제 무해한 항등식이다.
+LEFT_ARM_VENDOR_STIFFNESS = _vg.stiffness("l")
+LEFT_ARM_VENDOR_DAMPING = _vg.damping("l")
 
 
 
