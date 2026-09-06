@@ -730,7 +730,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                     else:
                         print(f"[EXTRAS] 일치 키 없음 — 패턴 {_pats}", flush=True)
             # grasp_sensor 호환 계측: binary_contact_buf 대신 마디별 접촉력 함수 사용
-            if not hasattr(_gp, "binary_contact_buf") and hasattr(_gp, "_tip_contact_forces"):
+            # ★09.07 `_finger_sensors` 를 같이 본다. 접촉 없는 트랙(grasp_kp·grasp_fj)은
+            #   부모 mixin 에서 `_tip_contact_forces` **메서드**를 물려받지만 센서는 만들지
+            #   않는다 — 메서드 존재만 보는 가드는 통과하고 첫 호출에서 AttributeError 로
+            #   죽는다(09.07 영상 추출 실패 실측). 능력은 메서드가 아니라 자원으로 판정한다.
+            if (not hasattr(_gp, "binary_contact_buf") and hasattr(_gp, "_tip_contact_forces")
+                    and getattr(_gp, "_finger_sensors", None)):
                 _gp._gpstep = getattr(_gp, "_gpstep", 0) + 1
                 if _gp._gpstep % 30 == 0:
                     # 트랙마다 접촉 임계 이름이 다르다(grasp_sensor=stage_contact_threshold,
