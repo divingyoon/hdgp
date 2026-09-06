@@ -709,7 +709,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 _raw_finger = actions[:, 6:11].clone()
                 actions = actions.clone()
                 actions[:, 6:11] = -1.0
-            obs, _rew, dones, _ = env.step(actions)
+            # ★09.07 4번째 반환값은 extras 다. `--probe_steps` 가 이걸 누적한다
+            #   (env.unwrapped.extras 를 따로 읽으려 하면 래퍼 체인에 따라 비어 보인다).
+            obs, _rew, dones, _step_extras = env.step(actions)
             if _goal_marker is not None:
                 _gm = env.unwrapped
                 while hasattr(_gm, "env"):
@@ -1368,10 +1370,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
         # ---- probe: extras 수치 누적 (09.07) ----------------------------------
         if args_cli.probe_steps > 0:
-            _gpp = env.unwrapped
-            if hasattr(_gpp, "env"):
-                _gpp = _gpp.env.unwrapped
-            for _k, _v in (getattr(_gpp, "extras", {}) or {}).items():
+            for _k, _v in (_step_extras or {}).items():
                 try:
                     _fv = float(_v)
                 except (TypeError, ValueError):
