@@ -42,6 +42,9 @@ from ..grasp_s2r.grasp_s2r_env import GraspS2REnv
 from .grasp_kp_env_cfg import GraspKPEnvCfg
 
 _OBJ_POSE_DIM = 7   # pos(3) + quat wxyz(4) — 물체 지연 큐의 폭
+#: 진단용 낙하 판정 — 래치는 섰는데 정착고 대비 이만큼도 안 뜬 상태(=놓쳤다).
+#: 보상·종료에는 쓰지 않는다(관측 전용).
+_DROP_DZ = 0.03
 
 
 class GraspKPEnv(GraspS2REnv):
@@ -263,6 +266,11 @@ class GraspKPEnv(GraspS2REnv):
     # ------------------------------------------------------------------
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
         flush = self.episode_length_buf == 0                # 리셋 직후 첫 지령은 큐 전 슬롯을 채운다
+        # ★09.07 진단: 정책이 액션 상한에 붙어 있는 비율. sigma 팽창의 **직접** 증거다
+        #   (지금까지는 losses/entropy 로 역산했다). 래퍼가 이미 ±1 로 자르므로
+        #   |a| ≥ 0.99 는 "잘린 값"으로 읽는다.
+        self._act_sat = (actions.abs() >= 0.99).float().mean()
+        self._act_absmean = actions.abs().mean()
         self.actions = self._act_delay.push(actions.clamp(-1.0, 1.0), flush)
         self._arm_command()
         self._hand_command()
@@ -504,7 +512,30 @@ class GraspKPEnv(GraspS2REnv):
         ex["task/tilt_deg"] = self._tilt_deg.mean()
         ex["task/syn_close"] = self._syn_close.mean()
         ex["task/close_gate"] = self._close_gate.mean()
+        self._log_probe_metrics(dz)
         self._log_fabric_metrics()
+
+    def _log_probe_metrics(self, dz: torch.Tensor) -> None:
+        """09.07 신설 진단 — 재학습 없이 probe 로 판정하기 위한 관측 전용 지표.
+
+        ①액션 포화율: sigma 팽창이 실제로 액션을 벽에 붙이고 있나
+        ②palm 실측 속도: 리미터 1.2 m/s 가 과한지 부족한지의 근거
+        ③낙하율: `done/fell` 은 판정선 0.15 < 상판 0.205 라 **상판에 떨어뜨리는 것을
+          못 잡는다**. 리프트 래치가 선 채 높이가 무너진 상태를 직접 센다
+        ④팔 관절속도 분위수: `arm_qd_max` 는 4096×7 중 최댓값이라 이상치다
+        """
+        ex = self.extras
+        ex["diag/action_sat"] = getattr(self, "_act_sat", torch.zeros((), device=self.device))
+        ex["diag/action_absmean"] = getattr(self, "_act_absmean", torch.zeros((), device=self.device))
+        _pv = self.robot.data.body_lin_vel_w[:, self.palm_idx].norm(dim=-1)
+        ex["diag/palm_speed_mean"] = _pv.mean()
+        ex["diag/palm_speed_p95"] = torch.quantile(_pv, 0.95)
+        # 래치는 유지되는데 높이가 무너졌다 = 리프트 후 놓쳤다
+        ex["diag/drop_frac"] = (self._latched & (dz < _DROP_DZ)).float().mean()
+        _qd = self.robot.data.joint_vel[:, self._arm_ids_t].abs()
+        ex["diag/arm_qd_p50"] = torch.quantile(_qd, 0.50)
+        ex["diag/arm_qd_p95"] = torch.quantile(_qd, 0.95)
+        ex["diag/arm_qd_p99"] = torch.quantile(_qd, 0.99)
 
     def _log_fabric_metrics(self) -> None:
         """부모 공식 그대로(joint_err 평균·최대, palm_err, 지령 원값). Track B(fabric 없음)는 건너뛴다."""
@@ -512,6 +543,8 @@ class GraspKPEnv(GraspS2REnv):
             return
         palm_pos = self._env_local(self.robot.data.body_pos_w[:, self.palm_idx])
         self.extras["fabric/palm_cmd_step_raw"] = self._palm_cmd_step_raw.mean()
+        # ★`_arm_command` 가 산출만 하고 로깅은 안 하던 값. 리미터가 실제로 자르는 비율이다.
+        self.extras["fabric/palm_cmd_rate_sat"] = self._palm_cmd_rate_sat.mean()
         _jerr = (self.fabric_q[:, : self.profile.num_arm_joints]
                  - self.robot.data.joint_pos[:, self._arm_ids_t]).abs()
         self.extras["fabric/joint_err_mean"] = _jerr.mean()

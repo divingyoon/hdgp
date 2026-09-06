@@ -161,6 +161,10 @@ class GraspFJEnv(GraspKPEnv):
         ex["ctrl/joint_err_max"] = _jerr.max()          # 평균은 막힘 구간을 묻는다
         ex["ctrl/arm_cmd_step_raw"] = self._arm_cmd_step_raw.mean()
         ex["ctrl/arm_limit_sat"] = self._arm_limit_sat.mean()
+        # ★09.07 목표↔실측 관절속도 격차. B 는 실측 qd 가 URDF 한계(최저 5.445 rad/s)를
+        #   넘는지가 sim2real 판정의 1차 조건이라 지령 쪽도 같이 남긴다.
+        ex["ctrl/arm_target_step"] = (self._arm_q_target
+                                      - self.robot.data.joint_pos[:, self._arm_ids_t]).abs().mean()
 
     def _reset_idx(self, env_ids) -> None:
         if env_ids is None or len(env_ids) == self.num_envs:

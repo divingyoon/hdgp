@@ -24,6 +24,10 @@ from isaaclab.app import AppLauncher
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Play a checkpoint of an RL agent from RL-Games.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
+parser.add_argument(
+    "--probe_steps", type=int, default=0,
+    help="0 보다 크면 그만큼 스텝을 돌고 env.extras 의 수치 지표를 **평균 내어** 표로 출력한 뒤 "
+         "종료한다. 재학습 없이 체크포인트를 계측하는 probe 용도(09.07 신설).")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument(
     "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
@@ -596,6 +600,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     if isinstance(obs, dict):
         obs = obs["obs"]
     timestep = 0
+    # ---- probe 누적기 (09.07) — `--probe_steps` 일 때만 채워진다 ------------------
+    _probe_acc: dict[str, list] = {}
+    _probe_n = 0
     _episode_step = 0
     _episode_buf = []
     # pour 전용 진단 로깅 게이트: grasp 등 다른 태스크에서 '--' 표 스팸 방지
@@ -1357,6 +1364,34 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         if args_cli.video:
             timestep += 1
             if timestep == args_cli.video_length:
+                break
+
+        # ---- probe: extras 수치 누적 (09.07) ----------------------------------
+        if args_cli.probe_steps > 0:
+            _gpp = env.unwrapped
+            if hasattr(_gpp, "env"):
+                _gpp = _gpp.env.unwrapped
+            for _k, _v in (getattr(_gpp, "extras", {}) or {}).items():
+                try:
+                    _fv = float(_v)
+                except (TypeError, ValueError):
+                    continue
+                if _fv != _fv:          # NaN 은 버린다
+                    continue
+                _acc = _probe_acc.setdefault(_k, [0.0, 0])
+                _acc[0] += _fv
+                _acc[1] += 1
+            _probe_n += 1
+            if _probe_n >= args_cli.probe_steps:
+                print("\n" + "=" * 78)
+                print(f"PROBE 요약 — {_probe_n} 스텝 평균 · task={args_cli.task} · "
+                      f"envs={env_cfg.scene.num_envs} · deterministic="
+                      f"{agent_cfg['params'].get('player', {}).get('deterministic')}")
+                print("=" * 78)
+                for _k in sorted(_probe_acc):
+                    _sum, _cnt = _probe_acc[_k]
+                    print(f"  {_k:38s} {_sum / max(_cnt, 1):>12.5f}   (n={_cnt})")
+                print("=" * 78, flush=True)
                 break
 
         sleep_time = dt - (time.time() - start_time)
