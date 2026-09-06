@@ -40,3 +40,4 @@ log_archive/
 videos/
 *.mp4
 *.webm
+wandb/

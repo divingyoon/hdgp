@@ -408,6 +408,14 @@ def _apply_playback_env_overrides(env_cfg) -> None:
     if args_cli.device is not None:
         env_cfg.sim.device = args_cli.device
 
+    # Playback VRAM 안전 가드: GUI 모드 소규모 환경 시 과도한 PhysX 버퍼로 인한 CUDA OOM 방지
+    if hasattr(env_cfg, "sim") and hasattr(env_cfg.sim, "physx"):
+        if getattr(env_cfg.scene, "num_envs", 1) <= 64:
+            env_cfg.sim.physx.gpu_max_rigid_patch_count = min(getattr(env_cfg.sim.physx, "gpu_max_rigid_patch_count", 2**20), 2**20)
+            env_cfg.sim.physx.gpu_max_rigid_contact_count = min(getattr(env_cfg.sim.physx, "gpu_max_rigid_contact_count", 2**20), 2**20)
+            env_cfg.sim.physx.gpu_found_lost_aggregate_pairs_capacity = min(getattr(env_cfg.sim.physx, "gpu_found_lost_aggregate_pairs_capacity", 1024 * 1024), 1024 * 1024)
+            env_cfg.sim.physx.gpu_total_aggregate_pairs_capacity = min(getattr(env_cfg.sim.physx, "gpu_total_aggregate_pairs_capacity", 1024 * 1024), 1024 * 1024)
+
     # 뷰어 카메라: logged env.yaml이 기본(먼) 카메라를 복원하므로 복원 이후 여기서 덮어쓴다.
     #   pour 태스크는 컵/손이 작아 기본 7.5m 뷰가 너무 멀다 → env-따라가는 근접뷰 기본 적용.
     def _parse_xyz(text):

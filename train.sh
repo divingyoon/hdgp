@@ -21,7 +21,9 @@ shift 2
 
 HDGP_ROOT="$(cd "$(dirname "$0")" && pwd)"
 if [ -z "${ISAACLAB_ROOT:-}" ]; then
-    if [ -d "/home/user/rl_ws/IsaacLab" ]; then
+    if [ -d "/home/usr/rl_ws/IsaacLab" ]; then
+        ISAACLAB_ROOT="/home/usr/rl_ws/IsaacLab"
+    elif [ -d "/home/user/rl_ws/IsaacLab" ]; then
         ISAACLAB_ROOT="/home/user/rl_ws/IsaacLab"
     else
         ISAACLAB_ROOT="$(cd "${HDGP_ROOT}/.." && pwd)/IsaacLab"
