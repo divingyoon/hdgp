@@ -721,7 +721,11 @@ class OpenArmTeoslloLeftPoseFabric(OpenArmTeoslloPoseFabric):
                  hand_mode="pca", hand_attractor_gain=None,
                  use_hand_repulsion=False,
                  use_body_repulsion_pairs=False,
-                 use_tip_fabric=False, tip_attractor_gain=None, tip_per_finger=False):
+                 use_tip_fabric=False, tip_attractor_gain=None, tip_per_finger=False,
+                 default_config_override=None, fabric_params_filename=None):
+        # ★09.06 default_config_override / fabric_params_filename 패스스루 추가(우측 클래스와 동일 인자):
+        #   dg5f-m 좌팔 변형(openarm_dg5f-m_bi_left + openarm_dg5f-m_left_pose_params.yaml)이
+        #   전용 params 와 계약 홈을 넘길 수 있어야 한다. None 이면 기존 거동(_LEFT_DEFAULT_CONFIG·기본 params).
         # ★08.17 robot_dir_name/robot_name 패스스루 추가: DG-5FS 전용 URDF
         #   (openarm_tesollo_bi_s_left)를 쓰는 태스크가 기존 URDF 를 건드리지 않고
         #   선택할 수 있게 한다. 기본값은 구 DG-5F(pour 등 기존 소비자 보호).
@@ -747,9 +751,11 @@ class OpenArmTeoslloLeftPoseFabric(OpenArmTeoslloPoseFabric):
             use_tip_fabric=use_tip_fabric,
             tip_attractor_gain=tip_attractor_gain,
             tip_per_finger=tip_per_finger,
-            default_config_override=_LEFT_DEFAULT_CONFIG,
+            default_config_override=(_LEFT_DEFAULT_CONFIG if default_config_override is None
+                                     else default_config_override),
             # 우측 기본 palm 자세 (ez,ey,ex)=(π/2,0,π/2) 의 미러 = (-π/2,0,-π/2)
             default_palm_euler_zyx=(-1.5708, 0.0, -1.5708),
+            fabric_params_filename=fabric_params_filename,
         )
 
 
