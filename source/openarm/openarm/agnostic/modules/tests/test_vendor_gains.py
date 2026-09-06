@@ -139,7 +139,7 @@ def test_robot_registry_arm_actuators_are_vendor():
         _assert_vendor(robots._arm_actuators("active", side), f"robots._arm_actuators({side})")
 
 
-@pytest.mark.parametrize("track", ["grasp_s2r", "grasp_sensor", "grasp_ua"])
+@pytest.mark.parametrize("track", ["grasp_s2r", "grasp_kp", "grasp_fj", "grasp_ua"])
 def test_active_track_profiles_are_vendor(track):
     module = __import__(f"openarm.agnostic.tasks.{track}.robot_profiles", fromlist=["x"])
     profiles = [v for v in vars(module).values() if hasattr(v, "actuator_specs")]
@@ -189,7 +189,7 @@ def test_hand_loader_refuses_integral_gain(tmp_path):
 HAND_EXCEPTIONS = {("grasp_ua", "rh56f1_right")}
 
 
-@pytest.mark.parametrize("track", ["grasp_s2r", "grasp_sensor", "grasp_ua"])
+@pytest.mark.parametrize("track", ["grasp_s2r", "grasp_kp", "grasp_fj", "grasp_ua"])
 def test_active_track_dg5f_hands_are_vendor(track):
     module = __import__(f"openarm.agnostic.tasks.{track}.robot_profiles", fromlist=["x"])
     checked = 0

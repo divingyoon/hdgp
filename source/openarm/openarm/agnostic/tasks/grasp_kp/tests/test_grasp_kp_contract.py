@@ -1,0 +1,371 @@
+"""grasp_kp 계약 테스트 — Isaac Sim 없이 돈다(소스 텍스트·AST 검사).
+
+cfg/env 는 isaaclab 을 끌어와 Isaac 앱 없이 import 가 안 되므로, 값이 아니라 **소스의
+계약**을 잠근다. 각 테스트에 왜 이 계약이 생겼는지(어떤 사고를 막는지)를 적어 둔다.
+
+실행:
+    cd hdgp && PYTHONPATH=source/openarm python3 -m pytest \
+        source/openarm/openarm/agnostic/tasks/grasp_kp/tests -q
+"""
+
+from __future__ import annotations
+
+import ast
+import re
+import textwrap
+import types
+from pathlib import Path
+
+_HERE = Path(__file__).resolve().parent.parent
+_ENV = (_HERE / "grasp_kp_env.py").read_text(encoding="utf-8")
+_CFG = (_HERE / "grasp_kp_env_cfg.py").read_text(encoding="utf-8")
+_REG = (_HERE / "config" / "__init__.py").read_text(encoding="utf-8")
+_LSTM = (_HERE / "config" / "agents" / "rl_games_ppo_lstm_cfg.yaml").read_text(encoding="utf-8")
+_MLP = (_HERE / "config" / "agents" / "rl_games_ppo_cfg.yaml").read_text(encoding="utf-8")
+
+
+def _code(src: str) -> str:
+    """주석·docstring 을 뺀 실행 코드만 — 설명문에 적힌 이름이 계약을 통과시키면 안 된다."""
+    tree = ast.parse(src)
+    doc_lines: set[int] = set()
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if not isinstance(body, list) or not body:
+            continue
+        first = body[0]
+        if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) \
+                and isinstance(first.value.value, str):
+            doc_lines.update(range(first.lineno, (first.end_lineno or first.lineno) + 1))
+    out = []
+    for i, line in enumerate(src.split("\n"), start=1):
+        if i in doc_lines:
+            continue
+        s = line.split("#", 1)[0]
+        if s.strip():
+            out.append(s)
+    return "\n".join(out)
+
+
+def _fn_block(src: str, name: str) -> str:
+    """`def name(` 함수 본문(주석 제거)."""
+    tree = ast.parse(src)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            lines = src.split("\n")[node.lineno - 1:node.end_lineno]
+            return _code(textwrap.dedent("\n".join(lines)))
+    raise AssertionError(f"함수 {name} 부재")
+
+
+def _call_block(src: str, name: str) -> str:
+    """`name = torch.cat(` 다중행 호출의 괄호 안 본문 — 괄호 균형으로 끝을 찾는다."""
+    m = re.search(rf"\n\s*{re.escape(name)} = torch\.cat\(", src)
+    assert m, f"{name} = torch.cat( 부재"
+    i = src.index("(", m.start())
+    depth, j = 0, i
+    while j < len(src):
+        if src[j] == "(":
+            depth += 1
+        elif src[j] == ")":
+            depth -= 1
+            if depth == 0:
+                return src[i + 1:j]
+        j += 1
+    raise AssertionError(f"{name} 호출의 괄호가 안 닫힌다")
+
+
+def _ordered(block: str, tokens: list[str]) -> None:
+    idx = [block.find(t) for t in tokens]
+    missing = [t for t, i in zip(tokens, idx) if i < 0]
+    assert not missing, f"누락 {missing}"
+    assert idx == sorted(idx), f"순서 어긋남 {list(zip(tokens, idx))}"
+
+
+def _class_methods(src: str, cls: str) -> set[str]:
+    tree = ast.parse(src)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == cls:
+            return {n.name for n in node.body if isinstance(n, ast.FunctionDef)}
+    raise AssertionError(f"클래스 {cls} 부재")
+
+
+# ---------------------------------------------------------------- 등록
+def test_four_task_ids_registered():
+    """id 4종(train/play × mlp/lstm). `-play` 가 없으면 play.py·warm 수집이 죽는다."""
+    assert '_ENTRY = "openarm.agnostic.tasks.grasp_kp.grasp_kp_env:GraspKPEnv"' in _REG
+    for suffix in ('""', '"-play"', '"-lstm"', '"-play-lstm"'):
+        assert suffix in _REG, f"태스크 id 접미사 {suffix} 미등록"
+    assert 'f"open-{_tag}_grasp_kp{_suffix}"' in _REG
+    assert re.search(r'"sens_r":\s*GraspKPTesolloRightEnvCfg', _REG)
+    assert "grasp_s2r" not in _code(_REG), "등록부가 grasp_s2r 를 가리킨다"
+
+
+def test_registration_keeps_fabric_gate():
+    """Track A 는 Fabrics 로만 돈다 — 자산 없는 프로필은 record-loud 로 건너뛴다."""
+    assert "SKIPPED" in _REG and "REGISTERED" in _REG
+    assert "fabric_class is None" in _code(_REG)
+
+
+def test_robot_profiles_is_a_shared_reexport():
+    """프로필 사본 금지 — grasp_s2r 캘리브 갱신이 조용히 안 실리는 사고 차단."""
+    from openarm.agnostic.tasks.grasp_kp import robot_profiles as kp
+    from openarm.agnostic.tasks.grasp_s2r import robot_profiles as s2r
+    assert kp.PROFILES is s2r.PROFILES and "tesollo_right" in kp.PROFILES
+
+
+# ---------------------------------------------------------------- 접촉 센서 0
+def test_no_contact_sensor_consumers_anywhere():
+    """사용자 확정(09.06): 접촉 센서는 생성·obs·state·reward·termination 어디에도 없다."""
+    code = _code(_ENV) + "\n" + _code(_CFG)
+    for banned in ("ContactSensor", "force_matrix_w", "net_forces_w", "_tip_force_local",
+                   "_contact_forces", "_log_diagnostics", "_palmar_mask", "_contact_azimuth_spread",
+                   "contact_force_threshold", "contact_force_max", "_hold_count", "_wrap_at_latch",
+                   "_disp_at_latch", "compute_grasp_s2r_rewards"):
+        assert banned not in code, banned
+
+
+def test_no_robot_joint_literals():
+    """로봇 이름은 프로필에서만 — env/cfg/등록부에 관절·바디 리터럴 금지."""
+    pat = re.compile(r"\b[rl]_(aj|hj|hl)_")
+    for name, src in (("env", _ENV), ("cfg", _CFG), ("reg", _REG)):
+        assert pat.search(_code(src)) is None, name
+
+
+def test_cfg_overrides_contact_dependent_defaults():
+    """DESIGN §8 덮어쓰기 5개 + 관절속도 노이즈 상향 — env 부팅 가드와 짝이다."""
+    code = _code(_CFG)
+    for token in ('respawn_on_fail: bool = False', 'synergy_hold_mode: str = "blocked"',
+                  'synergy_contact_freeze: bool = False', 'obs_object_noise_coherent: bool = True',
+                  'enable_adr: bool = False', 'obs_noise_qvel: float = 0.1',
+                  'adr_obs_noise_qvel_max: float = 0.1'):
+        assert token in code, token
+    guard = _fn_block(_ENV, "_assert_kp_contract")
+    for token in ('"blocked"', "synergy_contact_freeze", "respawn_on_fail", "enable_adr", "raise RuntimeError"):
+        assert token in guard, token
+
+
+def test_every_obs_noise_override_has_adr_max_companion():
+    """부모 `_assert_adr_monotonic` 은 ADR OFF 여도 base ≤ max 를 요구한다 — 09.06 두 트랙 부팅 사망의 원인.
+
+    `obs_noise_*` 를 덮어쓰면 `adr_obs_noise_*_max` 도 같은 파일에서 base 이상으로 덮어써야 한다.
+    """
+    code = _code(_CFG)
+    bases = dict(re.findall(r"^\s*obs_noise_(\w+): float = ([0-9.]+)", code, flags=re.M))
+    assert bases, "obs_noise_* 오버라이드가 하나도 없다(테스트 전제 붕괴)"
+    for name, base in bases.items():
+        m = re.search(rf"^\s*adr_obs_noise_{name}_max: float = ([0-9.]+)", code, flags=re.M)
+        assert m, f"obs_noise_{name} 오버라이드에 adr_obs_noise_{name}_max 짝이 없다"
+        assert float(m.group(1)) >= float(base), (name, m.group(1), base)
+
+
+def test_goal_box_reach_assert_exists_and_runs_at_boot():
+    """목표 박스 ⊄ 팔 지령 범위(앵커±델타 ∩ 클램프 박스)면 목표열이 조용히 멈춘다(09.06 리뷰) — 부팅 가드."""
+    init = _fn_block(_ENV, "_init_task_state")
+    _ordered(init, ["self._apply_palm_floor_override()", "self._goal_cfg = c.goal_seq_cfg()",
+                    "self._assert_goal_box_in_arm_reach()"])
+    block = _fn_block(_ENV, "_assert_goal_box_in_arm_reach")
+    for token in ("_delta_lo", "_delta_hi", "_box_lo", "_box_hi", "_anchor_off", "box_min", "box_max",
+                  "spawn_range", "_obj_origin_off", "tol_floor", "raise RuntimeError"):
+        assert token in block, token
+    assert 'getattr(self, "fabric", None) is None' in block, "Track B(관절공간)는 건너뛰어야 한다"
+    code = _code(_CFG)
+    assert "palm_delta_xyz: tuple[float, float, float] = (0.10, 0.10, 0.35)" in code
+    assert "goal_box_xy_halfwidth: float = 0.08" in code
+
+
+def test_tol_eval_fixes_curriculum_for_play():
+    """커리큘럼 상태는 체크포인트에 없다 — play 는 고정 tol(tol_eval>0)로 성공수를 비교 가능하게 잰다."""
+    assert "tol_eval: float = 0.0" in _code(_CFG)
+    init = _fn_block(_ENV, "_init_task_state")
+    assert "float(c.tol_eval) > 0.0" in init and "start=float(c.tol_eval), floor=float(c.tol_eval)" in init
+    assert "self.tol_eval = self.tol_floor" in _fn_block(_REG, "__post_init__")
+
+
+# ---------------------------------------------------------------- 차원 공식 = 조립
+def test_obs_formula_tokens_in_derive_spaces():
+    block = _fn_block(_CFG, "_derive_spaces")
+    for token in ("2 * n_arm", "2 * n_hand", "3 * num_tips", "int(self.arm_cmd_dim)",
+                  "_KP_DIM + _KP_DIM", "self.action_space",
+                  "+ 6 + 6 + 1 + num_tips + 1 + 1 + 1 + 1 + 1 + 1"):
+        assert token in block, token
+    assert "_KP_DIM = 3 * NUM_KEYPOINTS" in _code(_CFG)
+
+
+def test_derived_dims_tesollo_right_are_21_129_153():
+    """공식을 실제로 실행한다(Isaac 불필요) — DESIGN §4 A: 129 / critic +24 = 153."""
+    tree = ast.parse(_CFG)
+    node = next(n for n in ast.walk(tree)
+                if isinstance(n, ast.FunctionDef) and n.name == "_derive_spaces")
+    src = textwrap.dedent("\n".join(_CFG.split("\n")[node.lineno - 1:node.end_lineno]))
+    ns = {"_KP_DIM": 12, "NUM_KEYPOINTS": 4}
+    exec(src, ns)  # noqa: S102 — 소스 자신의 공식
+    from openarm.agnostic.tasks.grasp_kp.robot_profiles import PROFILES
+    cfg = types.SimpleNamespace(hand_layout="coupled3", arm_cmd_dim=6,
+                                _arm_action_dim=lambda profile: 6)
+    ns["_derive_spaces"](cfg, PROFILES["tesollo_right"])
+    assert (cfg.action_space, cfg.observation_space, cfg.state_space) == (21, 129, 153)
+
+
+def test_actor_obs_assembly_matches_design_order():
+    """DESIGN §4 actor 순서 — `_derive_spaces` 공식과 같은 순서로 cat 해야 한다."""
+    _ordered(_call_block(_code(_ENV), "_noisy"), [
+        '"arm_q"', '"arm_qd"', '"hand_q"', '"hand_qd"', '"palm_pos"', '"palm_ax"',
+        '"tips_rel_palm"', '"cmd_state"', '"n_kp_rel_palm"', '"n_kp_rel_goal"',
+        "self.actions",
+    ])
+    _ordered(_call_block(_code(_ENV), "clean"), [
+        '"arm_q"', '"arm_qd"', '"hand_q"', '"hand_qd"', '"palm_pos"', '"palm_ax"',
+        '"tips_rel_palm"', '"cmd_state"', '"kp_rel_palm"', '"kp_rel_goal"',
+        "self.actions",
+    ])
+    # 물체 쿼터니언 금지(09.06 리뷰): 키포인트 밖 정보는 yaw·부호뿐 — 축대칭 실기 yaw 는 임의라 분포 밖 채널.
+    obs = _fn_block(_ENV, "_get_observations") + _fn_block(_ENV, "_object_blocks")
+    assert "n_quat" not in obs and 'ob["quat"]' not in obs and "quat=" not in obs
+
+
+def test_critic_state_assembly_matches_design_order():
+    """critic = clean + 물체 속도(6) + palm 속도(6) + d*_kp + d*_ft + lifted + progress + successes + reward + dz + d_kp."""
+    _ordered(_fn_block(_ENV, "_privileged_blocks"), [
+        "root_lin_vel_w", "root_ang_vel_w", "body_lin_vel_w", "body_ang_vel_w",
+        "closest_kp", "closest_ft", "_latched", "episode_length_buf", "successes",
+        "_last_reward", '"dz"', '"kp_dist"',
+    ])
+    assert "state = torch.cat([clean] + self._privileged_blocks(ob)" in _code(_ENV)
+
+
+def test_obs_shape_guard_raises_with_both_numbers():
+    block = _fn_block(_ENV, "_check_obs_shapes_once")
+    assert "observation_space" in block and "state_space" in block and "raise RuntimeError" in block
+    assert "self._check_obs_shapes_once(_noisy, state)" in _fn_block(_ENV, "_get_observations")
+
+
+# ---------------------------------------------------------------- 보상·목표·래치
+def test_reward_is_progress_only_via_shared_module():
+    block = _fn_block(_ENV, "_get_rewards")
+    assert "compute_progress_reward(" in block and "update_near_goal(" in block
+    assert "PROGRESS_REWARD_TERMS" in _code(_ENV)
+    assert 'self._latched = out["lifted"]' in block, "래치가 높이 래치(lifted)로 재정의되지 않았다"
+    assert "_tol.update(self._trk.prev_episode_successes)" in block
+
+
+def test_goal_advance_uses_module_sampler_from_previous_goal():
+    """다음 목표는 **이전 목표** 기준 델타(SimToolReal) — 물체 위치 기준이면 목표가 물체를 쫓는다."""
+    block = _fn_block(_ENV, "_advance_goals")
+    assert "sample_delta_goal(self.goal_pos, self.goal_quat" in block
+    assert "clear_goal(" in block and "successes += " in block
+
+
+def test_stage_ladder_is_lift_then_goals():
+    assert '("lifted", "goal1", "goal2", "goal3")' in _code(_ENV)
+
+
+# ---------------------------------------------------------------- 액션 경로
+def test_pre_physics_step_is_delay_then_arm_hand_post_wrench():
+    _ordered(_fn_block(_ENV, "_pre_physics_step"), [
+        "self.episode_length_buf == 0", "_act_delay.push(", "self._arm_command()",
+        "self._hand_command()", "self._post_command()", "self._apply_wrench()",
+    ])
+
+
+def test_arm_command_is_anchor_relative_delta_with_limiters():
+    """grasp_s2r 팔 구간 그대로 — 절대 매핑으로 되돌리면 랜덤워크 재발."""
+    block = _fn_block(_ENV, "_arm_command")
+    for token in ("self._palm_anchor() + delta", "palm_cmd_rate_limit_m",
+                  "palm_cmd_rate_limit_rot_deg", "self._update_cmd_markers()"):
+        assert token in block, token
+
+
+def test_post_command_syncs_fabric_hand_and_integrates_once():
+    code = _code(_ENV)
+    assert "_syn_to_fab(self._syn_target)" in _fn_block(_ENV, "_post_command")
+    assert code.count("self._step_fabric()") == 1
+    assert "integrator.step(" not in code, "적분은 부모 `_step_fabric` 한 곳"
+
+
+def test_env_overrides_exactly_the_design_hook_set():
+    """DESIGN §8 훅만 덮어쓴다 — `_apply_action`/`_step_fabric` 등을 덮으면 Track A 가 아니다."""
+    names = _class_methods(_ENV, "GraspKPEnv")
+    required = {"_setup_scene", "_init_task_state", "_pre_physics_step", "_arm_command",
+                "_hand_command", "_post_command", "_get_observations", "_get_rewards",
+                "_get_dones", "_reset_idx"}
+    forbidden = {"__init__", "_apply_action", "_step_fabric", "_setup_fabrics", "_init_home_palm",
+                 "_synergy_targets", "_setup_synergy", "_palm_anchor", "_apply_gravity_compensation"}
+    assert required <= names, required - names
+    assert not (forbidden & names), forbidden & names
+
+
+# ---------------------------------------------------------------- 외란·지연
+def test_wrench_applied_every_step_in_world_frame_on_lifted():
+    block = _fn_block(_ENV, "_apply_wrench")
+    assert "self._wrench.step(self._obj_mass, self._latched)" in block
+    assert "set_external_force_and_torque(forces, torques, is_global=True)" in block
+    assert "WrenchDR(" in _fn_block(_ENV, "_init_task_state")
+
+
+def test_three_delay_queues_obs_action_object():
+    init = _fn_block(_ENV, "_init_task_state")
+    assert init.count("DelayQueue(") == 3
+    assert "_OBJ_POSE_DIM" in init and "_OBJ_POSE_DIM = 7" in _code(_ENV)
+    obs = _fn_block(_ENV, "_object_blocks")
+    assert "_obj_delay.push(" in obs and "noisy_pose(" in obs
+    assert "_obs_delay.push(torch.nan_to_num(_noisy), flush)" in _fn_block(_ENV, "_get_observations")
+
+
+# ---------------------------------------------------------------- 종료·리셋·박스
+def test_dones_add_floor_termination_and_goal_truncation():
+    block = _fn_block(_ENV, "_get_dones")
+    assert "super()._get_dones()" in block
+    assert "hand_floor_terminate_depth" in block and "goal_max" in block
+    assert "self._trk.successes >= int(self.cfg.goal_max)" in block
+
+
+def test_reset_order_super_goal_trackers_queues_wrench_latch():
+    _ordered(_fn_block(_ENV, "_reset_idx"), [
+        "super()._reset_idx(env_ids)", "sample_first_goal(", "_trk.full_reset(env_ids)",
+        "_obs_delay.reset(env_ids)", "_act_delay.reset(env_ids)", "_obj_delay.reset(env_ids)",
+        "_wrench.reset(env_ids)", "self._latched[env_ids] = False",
+    ])
+
+
+def test_palm_floor_override_raises_both_lower_bounds():
+    """09.06 실측 "a=0 에서 손이 상판 49 mm 관통" — 지령 박스와 최종 클램프 둘 다 올려야 한다."""
+    block = _fn_block(_ENV, "_apply_palm_floor_override")
+    assert "palm_box_min_z_override" in block
+    assert "self._palm_lo[2] = max(" in block and "self._box_lo[2] = max(" in block
+    assert "palm_box_min_z_override: float = 0.27" in _code(_CFG)
+
+
+def test_goal_box_derived_from_profile_spawn_center_in_finalize():
+    fin = _fn_block(_CFG, "finalize_after_overrides")
+    assert "super().finalize_after_overrides()" in fin and "_derive_goal_box(" in fin
+    box = _fn_block(_CFG, "_derive_goal_box")
+    for token in ("object_spawn_center", "goal_box_xy_halfwidth", "goal_box_z_range",
+                  "object_origin_offset_z", "table_surface_z"):
+        assert token in box, token
+
+
+def test_cfg_defaults_match_design_and_reward_audit():
+    code = _code(_CFG)
+    for token in ("goal_first_z_range: tuple[float, float] = (0.16, 0.24)",
+                  "goal_box_z_range: tuple[float, float] = (0.10, 0.30)",
+                  "tol_start: float = 0.06", "tol_floor: float = 0.015",
+                  "rw_lift_latch_height: float = 0.10", "rw_hand_floor_z: float = 0.215",
+                  "obs_delay_steps: int = 3", "action_delay_steps: int = 3",
+                  "object_delay_steps: int = 10", "goal_max: int = 50",
+                  "keypoint_scale: float = 1.5", "keypoint_fixed_height: float = 0.12"):
+        assert token in code, token
+
+
+# ---------------------------------------------------------------- PPO yaml (DESIGN §6)
+def test_lstm_yaml_bootstrap_gamma_and_architecture():
+    assert "value_bootstrap: True" in _LSTM and "value_bootstrap: False" not in _LSTM
+    assert "gamma: 0.99\n" in _LSTM and "gamma: 0.998" not in _LSTM
+    assert _LSTM.count("units: [1024, 1024, 512, 512]") == 2, "actor·critic mlp 4층"
+    assert "learning_rate: 1e-4" in _LSTM
+    assert _LSTM.count("kl_threshold: 0.016") == 2 and "kl_threshold: 0.013" not in _LSTM
+    assert "name: agn_grasp_kp-lstm" in _LSTM
+    assert "mixed_precision: False" in _LSTM
+
+
+def test_mlp_yaml_bootstrap_and_gamma():
+    assert "value_bootstrap: True" in _MLP and "gamma: 0.99\n" in _MLP
+    assert "name: agn_grasp_kp\n" in _MLP
