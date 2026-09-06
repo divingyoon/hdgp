@@ -363,7 +363,23 @@ def test_lstm_yaml_bootstrap_gamma_and_architecture():
     assert "learning_rate: 1e-4" in _LSTM
     assert _LSTM.count("kl_threshold: 0.016") == 2 and "kl_threshold: 0.013" not in _LSTM
     assert "name: agn_grasp_kp-lstm" in _LSTM
-    assert "mixed_precision: False" in _LSTM
+    assert "mixed_precision: True" in _LSTM
+    # ★09.07 SimToolReal 정렬 — network 하이퍼파라미터를 원본과 동일하게 맞춘다
+    #   (isaacgymenvs/cfg/train/SimToolReal{PPO,LSTMAsymmetricPPO}.yaml).
+    #   ★bound_loss_type 은 원본이 키를 지정하지 않아 rl_games 기본값 'bound' 가 쓰인다.
+    #     구 'regularization'(미국식 z)은 어느 분기에도 안 걸려 bounds loss 가 꺼져 있었다.
+    # ★검사는 **키 값**만 본다 — 주석이 구값 이름을 설명하므로 단어 검색은 오탐이다.
+    assert "bound_loss_type: bound" in _LSTM
+    assert "bound_loss_type: regularization" not in _LSTM
+    assert "bounds_loss_coef: 0.0001" in _LSTM
+    assert "entropy_coef: 0.0\n" in _LSTM and "entropy_coef: 0.002" not in _LSTM
+    assert "e_clip: 0.1" in _LSTM and "e_clip: 0.2" not in _LSTM
+    assert _LSTM.count("mini_epochs: 2") == 2, "actor·central_value 둘 다 2"
+    assert "concat_input: False" in _LSTM and "concat_input: True" not in _LSTM
+    assert "concat_output: False" in _LSTM and "concat_output: True" not in _LSTM
+    # ★minibatch 는 바꾸지 않는다 — 4,096env×16/16,384 = 4 개로 원본(24,576×16/98,304)과
+    #   에폭당 미니배치 수가 이미 같다. 환경 수에 묶인 값이라 숫자를 그대로 옮기면 안 된다.
+    assert "minibatch_size: 16384" in _LSTM
 
 
 def test_mlp_yaml_bootstrap_and_gamma():
