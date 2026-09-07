@@ -271,6 +271,7 @@ class GraspKPEnv(GraspS2REnv):
         #   |a| ≥ 0.99 는 "잘린 값"으로 읽는다.
         self._act_sat = (actions.abs() >= 0.99).float().mean()
         self._act_absmean = actions.abs().mean()
+        self._act_raw = actions.detach()      # 축별 분해(로깅 전용)
         self.actions = self._act_delay.push(actions.clamp(-1.0, 1.0), flush)
         self._arm_command()
         self._hand_command()
@@ -281,6 +282,7 @@ class GraspKPEnv(GraspS2REnv):
         """grasp_s2r `_pre_physics_step` 팔 구간 그대로: 앵커+델타 → 박스 → 리미터 → 마커."""
         delta = 0.5 * (self.actions[:, :6] + 1.0) * (self._delta_hi - self._delta_lo) \
             + self._delta_lo
+        self._palm_delta_cmd = delta                         # 축별 로깅 전용
         _raw_targets = self._palm_anchor() + delta           # a=0 → 앵커(에피소드 상수)
         self.palm_targets = _raw_targets.clamp(self._box_lo, self._box_hi)
         self._palm_cmd_box_sat = (self.palm_targets[:, :3] != _raw_targets[:, :3]).float()
@@ -532,6 +534,21 @@ class GraspKPEnv(GraspS2REnv):
         ex["diag/palm_speed_p95"] = torch.quantile(_pv, 0.95)
         # 래치는 유지되는데 높이가 무너졌다 = 리프트 후 놓쳤다
         ex["diag/drop_frac"] = (self._latched & (dz < _DROP_DZ)).float().mean()
+        # ★09.07 액션 매핑 판정 — 21/22 차원 평균은 팔 탓인지 손 탓인지 못 가른다.
+        #   팔 구간(A: palm 6D / B: 관절 7D)과 손 시너지 15D 를 나눠 본다.
+        _ar = getattr(self, "_act_raw", None)
+        if _ar is not None:
+            _o = self._hand_action_offset
+            _sat = (_ar.abs() >= 0.99).float()
+            ex["diag/act_sat_arm"] = _sat[:, :_o].mean()
+            ex["diag/act_sat_hand"] = _sat[:, _o:].mean()
+            for _i in range(_o):                    # 팔 축별 — 어느 축이 벽에 붙었나
+                ex[f"diag/act_sat_arm{_i}"] = _sat[:, _i].mean()
+        # 실현 델타 |목표−앵커| 를 박스 반폭과 나란히 본다(A 전용).
+        _pd = getattr(self, "_palm_delta_cmd", None)
+        if _pd is not None:
+            for _i, _ax in enumerate("xyz"):
+                ex[f"diag/palm_delta_{_ax}"] = _pd[:, _i].abs().mean()
         _qd = self.robot.data.joint_vel[:, self._arm_ids_t].abs()
         ex["diag/arm_qd_p50"] = torch.quantile(_qd, 0.50)
         ex["diag/arm_qd_p95"] = torch.quantile(_qd, 0.95)
@@ -545,6 +562,9 @@ class GraspKPEnv(GraspS2REnv):
         self.extras["fabric/palm_cmd_step_raw"] = self._palm_cmd_step_raw.mean()
         # ★`_arm_command` 가 산출만 하고 로깅은 안 하던 값. 리미터가 실제로 자르는 비율이다.
         self.extras["fabric/palm_cmd_rate_sat"] = self._palm_cmd_rate_sat.mean()
+        # ★`_arm_command` 가 산출만 하던 축별 박스 포화. 클램프 박스가 실제로 무는지.
+        for _i, _ax in enumerate("xyz"):
+            self.extras[f"fabric/palm_cmd_box_sat_{_ax}"] = self._palm_cmd_box_sat[:, _i].mean()
         _jerr = (self.fabric_q[:, : self.profile.num_arm_joints]
                  - self.robot.data.joint_pos[:, self._arm_ids_t]).abs()
         self.extras["fabric/joint_err_mean"] = _jerr.mean()
